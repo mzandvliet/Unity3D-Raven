@@ -4,24 +4,31 @@ using SharpRaven.Data;
 using System.Net;
 using System.IO;
 using System.Collections.Generic;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using Newtonsoft.Json;
 using SharpRaven.Utilities;
 using SharpRaven.Logging;
 
-namespace SharpRaven {
-    public class RavenClient {
-		
-		/// 
-		/// To support WebClient on Android and iOS.
-		/// 
-		/// See http://www.vovchik.org/blog/13001 for more details
-		/// 
-		public class HttpRequestCreator : IWebRequestCreate 
-		{
-			public WebRequest Create(Uri uri)
-			{
-				return new HttpWebRequest(uri);	
-			}
-		}		
+namespace SharpRaven
+{
+    public class RavenClient
+    {
+
+        /// 
+        /// To support WebClient on Android and iOS.
+        /// 
+        /// See http://www.vovchik.org/blog/13001 for more details
+        /// 
+        public class HttpRequestCreator : IWebRequestCreate
+        {
+            public WebRequest Create(Uri uri)
+            {
+                return HttpWebRequest.Create(uri);
+                //return new HttpWebRequest(uri);	
+            }
+        }
 
         /// <summary>
         /// The DSN currently being used to log exceptions.
@@ -45,19 +52,25 @@ namespace SharpRaven {
         /// </summary>
         public string Logger { get; set; }
 
-        public RavenClient(string dsn) {
-			
-			WebRequest.RegisterPrefix("http", new HttpRequestCreator());
-			
+        public RavenClient(string dsn)
+        {
+
+            WebRequest.RegisterPrefix("http", new HttpRequestCreator());
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3;
+            ServicePointManager.ServerCertificateValidationCallback = UnsafeSecurityPolicy.Validator;
+
             CurrentDSN = new DSN(dsn);
             Compression = true;
             Logger = "root";
         }
 
-        public RavenClient(DSN dsn) {
-			
-			WebRequest.RegisterPrefix("http", new HttpRequestCreator());
-			
+        public RavenClient(DSN dsn)
+        {
+
+            WebRequest.RegisterPrefix("http", new HttpRequestCreator());
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3;
+            ServicePointManager.ServerCertificateValidationCallback = UnsafeSecurityPolicy.Validator;
+
             CurrentDSN = dsn;
             Compression = true;
             Logger = "root";
@@ -67,22 +80,22 @@ namespace SharpRaven {
         {
             return CaptureException(e, null, null);
         }
-		
-		///
-		/// @kims
-		/// NOTE:
-		///   Commented out secound paramter not to have default paramter due to Unity3d does not resolve that.
-		///
+
+        ///
+        /// @kims
+        /// NOTE:
+        ///   Commented out secound paramter not to have default paramter due to Unity3d does not resolve that.
+        ///
         public int CaptureException(Exception e, Dictionary<string, string> tags /*= null*/)
         {
             return CaptureException(e, tags, null);
         }
 
-		///
-		/// @kims
-		/// NOTE:
-		///   Commented out secound paramter not to have default paramter due to Unity3d does not resolve that.
-		///		
+        ///
+        /// @kims
+        /// NOTE:
+        ///   Commented out secound paramter not to have default paramter due to Unity3d does not resolve that.
+        ///		
         public int CaptureException(Exception e, Dictionary<string, string> tags /*= null*/, object extra = null)
         {
             JsonPacket packet = new JsonPacket(CurrentDSN.ProjectID, e);
@@ -94,18 +107,19 @@ namespace SharpRaven {
 
             return 0;
         }
-		
-		public int CaptureUntiyLog(string log, string stack, LogType logType, Dictionary<string, string> tags = null, object extra = null)
-		{
+
+        public int CaptureUntiyLog(string log, string stack, LogType logType, Dictionary<string, string> tags = null,
+            object extra = null)
+        {
             JsonPacket packet = new JsonPacket(CurrentDSN.ProjectID, log, stack, logType);
             packet.Level = ErrorLevel.error;
             packet.Tags = tags;
             packet.Extra = extra;
 
             Send(packet, CurrentDSN);
-			
-			return 0;
-		}
+
+            return 0;
+        }
 
         public int CaptureMessage(string message)
         {
@@ -122,7 +136,8 @@ namespace SharpRaven {
             return CaptureMessage(message, level, tags, null);
         }
 
-        public int CaptureMessage(string message, ErrorLevel level /*= ErrorLevel.info*/, Dictionary<string, string> tags /*= null*/, object extra /*= null*/)
+        public int CaptureMessage(string message, ErrorLevel level /*= ErrorLevel.info*/,
+            Dictionary<string, string> tags /*= null*/, object extra /*= null*/)
         {
             JsonPacket packet = new JsonPacket(CurrentDSN.ProjectID);
             packet.Message = message;
@@ -135,77 +150,47 @@ namespace SharpRaven {
             return 0;
         }
 
-        public bool Send(JsonPacket packet, DSN dsn) {
+        public bool Send(JsonPacket packet, DSN dsn)
+        {
             packet.Logger = Logger;
 
-            try {
-                HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create(dsn.SentryURI);
-                request.Method = "POST";
-                request.Accept = "application/json";
-                request.ContentType = "application/json; charset=utf-8";
-                request.Headers.Add("X-Sentry-Auth", PacketBuilder.CreateAuthenticationHeader(dsn));
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3;
-                request.UserAgent = "RavenSharp/1.0";
+            string authHeader = PacketBuilder.CreateAuthenticationHeader(dsn);
 
-                Debug.Log("Header: " + PacketBuilder.CreateAuthenticationHeader(dsn));
-                Debug.Log("Packet: " + packet.Serialize());
+            var postHeader = new Dictionary<string, string>();
+            postHeader.Add("ContentType", "application/json");
+            postHeader.Add("User-Agent", "RavenSharp/1.0");
+            postHeader.Add("X-Sentry-Auth", authHeader);
 
-                // Write the messagebody.
-                using (Stream s = request.GetRequestStream()) {
-                    using (StreamWriter sw = new StreamWriter(s)) {
-                        // Compress and encode.
-                        //string data = Utilities.GzipUtil.CompressEncode(packet.Serialize());
-                        //Console.WriteLine("Writing: " + data);
-                        // Write to the JSON script when ready.
-                        string data = packet.Serialize();
-                        if (LogScrubber != null)
-                            data = LogScrubber.Scrub(data);
+            string data = packet.Serialize();
+            if (LogScrubber != null)
+                data = LogScrubber.Scrub(data);
 
-                        sw.Write(data);
-                        // Close streams.
-                        sw.Flush();
-                        sw.Close();
-                    }
-                    s.Flush();
-                    s.Close();
-                }
+            Debug.Log("Header: " + PacketBuilder.CreateAuthenticationHeader(dsn));
+            Debug.Log("Packet: " + data);
 
-                using (HttpWebResponse wr = (HttpWebResponse)request.GetResponse())
-                {
-                    wr.Close();
-                }
-            } catch (WebException e) {
-				/*
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.Write("[ERROR] ");
-                Console.ForegroundColor = ConsoleColor.Gray;
-                */
-                Debug.Log("[ERROR] " + e.Message);
+            var encoding = new System.Text.UTF8Encoding();
 
-                string messageBody = String.Empty;
-                if (e.Response != null)
-                {
-                    using (StreamReader sw = new StreamReader(e.Response.GetResponseStream()))
-                    {
-                        messageBody = sw.ReadToEnd();
-                    }
-                    Debug.Log("[MESSAGE BODY] " + messageBody);
-                }
-                
-                return false;
+            var www = new WWW(dsn.SentryURI, encoding.GetBytes(data), postHeader);
+
+            while (!www.isDone)
+            {
+                Thread.Sleep(5);
             }
+
+            Debug.Log("Done!");
+
+            Debug.Log("Got: " + www.text);
 
             return true;
         }
 
-		
         #region Deprecated methods
 
-		///
-		/// @kims
-		/// NOTE:
-		///   Commented out the followings due to Unity3d spit out error because it treats them as ambigous methods.
-		///		
+        ///
+        /// @kims
+        /// NOTE:
+        ///   Commented out the followings due to Unity3d spit out error because it treats them as ambigous methods.
+        ///		
         /**
          *  These methods have been deprectaed in favour of the ones
          *  that have the same names as the other sentry clients, this
@@ -224,7 +209,23 @@ namespace SharpRaven {
             return this.CaptureException(e, tags);
         }
 */
+
         #endregion
-		
+
+    }
+
+    public class UnsafeSecurityPolicy
+    {
+        public static bool Validator(
+            object sender,
+            X509Certificate certificate,
+            X509Chain chain,
+            SslPolicyErrors policyErrors)
+        {
+
+            //*** Just accept and move on...
+            Debug.Log("Validation successful!");
+            return true;
+        }
     }
 }

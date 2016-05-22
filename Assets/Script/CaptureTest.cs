@@ -7,17 +7,16 @@ using System;
 public class CaptureTest : MonoBehaviour {
 	
 	//const string dsnUrl = "add-your-sentry-dns-here";
-	const string dsnUrl = "http://ef96c1bff6194467bfd566bef1506d42:012cd70cf2f7447a973ea018219a6850@ser4kakao.gameus.co.kr:9000/2";	
+	const string dsnUrl = "https://c2854807ceba4725856a9ded504305d5:1d256f1ca71b4ee3a6ebc82d31810f3d@app.getsentry.com/79295";	
     static SharpRaven.RavenClient ravenClient;
-	
 
 	void Start () 
 	{	
 		setup();
-        testWithStacktrace();
         testWithoutStacktrace();
-	}
-	
+        testWithStacktrace();
+    }
+
     static void setup()
     {
         Debug.Log("Initializing RavenClient.");

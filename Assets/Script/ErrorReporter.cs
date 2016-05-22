@@ -5,7 +5,7 @@ using SharpRaven;
 
 public class ErrorReporter : MonoBehaviour {
 	
-	const string dsnUrl = "add_your_sentry_dsn_url_here";
+	const string dsnUrl = "https://c2854807ceba4725856a9ded504305d5:1d256f1ca71b4ee3a6ebc82d31810f3d@app.getsentry.com/79295";
     static SharpRaven.RavenClient ravenClient;
 	
 	void Awake()
@@ -13,9 +13,14 @@ public class ErrorReporter : MonoBehaviour {
 		DontDestroyOnLoad(this.gameObject);
 		
 		setup();
-		
-		Application.RegisterLogCallback(HandleLog);
+
+	    Application.logMessageReceived += HandleLog;
 	}
+
+    void OnDestroy()
+    {
+        Application.logMessageReceived -= HandleLog;
+    }
 	
     static void setup()
     {
@@ -57,7 +62,7 @@ public class ErrorReporter : MonoBehaviour {
 		dic.Add("GPU-id", SystemInfo.graphicsDeviceID.ToString());
 		dic.Add("GPU-Version", SystemInfo.graphicsDeviceVersion);
 		dic.Add("GPU-ShaderLevel", SystemInfo.graphicsShaderLevel.ToString());
-		dic.Add("GPU-PixelFillrate", SystemInfo.graphicsPixelFillrate.ToString());		
+		//dic.Add("GPU-PixelFillrate", SystemInfo.graphicsPixelFillrate.ToString());		
 		
 		//ravenClient.CaptureMessage(log, SharpRaven.Data.ErrorLevel.error, dic, null);
 		
