@@ -9,49 +9,39 @@ public class CaptureTest : MonoBehaviour {
 
     private RavenClient _ravenClient;
 
-	void Start () 
-	{	
-		setup();
+	void Awake() {	
+		Setup();
     }
 
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-                testWithoutStacktrace();
-                testWithStacktrace();
+    private void Update() {
+        if (Input.GetKeyDown(KeyCode.Space)) {
+            TestWithoutStacktrace();
+            TestWithStacktrace();
         }
     }
 
-    void setup()
-    {
+    void Setup() {
         _ravenClient = new RavenClient(_dsnUrl, this);
         _ravenClient.Logger = "C#";
         _ravenClient.LogScrubber = new LogScrubber();
     }
 
 	
-    void testWithoutStacktrace()
-    {
-            _ravenClient.CaptureException(new Exception("Test without a stacktrace"));
+    void TestWithoutStacktrace() {
+        _ravenClient.CaptureException(new Exception("Test without a stacktrace"));
     }
 
-    void testWithStacktrace()
-    {
-        try
-        {
+    void TestWithStacktrace() {
+        try {
             PerformDivideByZero();
         }
-        catch (Exception e)
-        {
+        catch (Exception e) {
             _ravenClient.CaptureException(e);
         }
     }
 
-    static void PerformDivideByZero()
-    {
+    static void PerformDivideByZero() {
         int i2 = 0;
         int i = 10 / i2;
     }
-	
 }

@@ -53,7 +53,7 @@ namespace SharpRaven
             _postHeader = new Dictionary<string, string>();
             _encoding = new UTF8Encoding();
             _packetSerializer = new JsonPacketSerializer();
-            _packetPool = new JsonPacketPool(16);
+            _packetPool = new JsonPacketPool(4);
             _wwwPool = new WWWPool(16);
         }
 
