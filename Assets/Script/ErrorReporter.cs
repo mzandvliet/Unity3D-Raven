@@ -4,9 +4,8 @@ using System.Collections.Generic;
 using SharpRaven;
 
 public class ErrorReporter : MonoBehaviour {
-	
-	const string dsnUrl = "https://c2854807ceba4725856a9ded504305d5:1d256f1ca71b4ee3a6ebc82d31810f3d@app.getsentry.com/79295";
-    static SharpRaven.RavenClient ravenClient;
+    [SerializeField] private string _dsnUrl = "http://pub:priv@app.getsentry.com/12345";
+    private RavenClient ravenClient;
 	
 	void Awake()
 	{
@@ -22,10 +21,10 @@ public class ErrorReporter : MonoBehaviour {
         Application.logMessageReceived -= HandleLog;
     }
 	
-    static void setup()
+    void setup()
     {
         Debug.Log("Initializing RavenClient.");
-        ravenClient = new RavenClient(dsnUrl);
+        ravenClient = new RavenClient(_dsnUrl);
         ravenClient.Logger = "C#";
         ravenClient.LogScrubber = new SharpRaven.Logging.LogScrubber();
 

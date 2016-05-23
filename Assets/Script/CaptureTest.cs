@@ -5,10 +5,9 @@ using SharpRaven.Logging;
 using System;
 
 public class CaptureTest : MonoBehaviour {
-	
-	//const string dsnUrl = "add-your-sentry-dns-here";
-	const string dsnUrl = "https://c2854807ceba4725856a9ded504305d5:1d256f1ca71b4ee3a6ebc82d31810f3d@app.getsentry.com/79295";	
-    static SharpRaven.RavenClient ravenClient;
+    [SerializeField] private string _dsnUrl = "http://pub:priv@app.getsentry.com/12345";
+
+    static RavenClient ravenClient;
 
 	void Start () 
 	{	
@@ -27,10 +26,10 @@ public class CaptureTest : MonoBehaviour {
         //testWithStacktrace();
     }
 
-    static void setup()
+    void setup()
     {
         //Debug.Log("Initializing RavenClient.");
-        ravenClient = new RavenClient(dsnUrl);
+        ravenClient = new RavenClient(_dsnUrl);
         ravenClient.Logger = "C#";
         ravenClient.LogScrubber = new SharpRaven.Logging.LogScrubber();
 
@@ -42,14 +41,14 @@ public class CaptureTest : MonoBehaviour {
     }
 
 	
-    static void testWithoutStacktrace()
+    void testWithoutStacktrace()
     {
 //            Debug.Log("Send exception without stacktrace.");
             var id = ravenClient.CaptureException(new Exception("Test without a stacktrace"));
 //            Debug.Log("Sent packet: " + id);
     }
 
-    static void testWithStacktrace()
+    void testWithStacktrace()
     {
 //        Debug.Log("Causing division by zero exception.");
         try
