@@ -72,12 +72,6 @@ namespace SharpRaven.Data {
         public Dictionary<string, string> Tags;
 
         /// <summary>
-        /// An arbitrary mapping of additional metadata to store with the event.
-        /// </summary>
-        [JsonProperty(PropertyName = "extra", NullValueHandling = NullValueHandling.Ignore)]
-        public object Extra;
-
-        /// <summary>
         /// Identifies the host client from which the event was recorded.
         /// </summary>
         [JsonProperty(PropertyName = "server_name", NullValueHandling = NullValueHandling.Ignore)]
@@ -196,9 +190,9 @@ namespace SharpRaven.Data {
 
             writer.WriteStartObject();
             {
-                WritePropertyIfNotNullOrEmpty("event_id", packet.EventID);
-                WritePropertyIfNotNullOrEmpty("project", packet.Project);
-                WritePropertyIfNotNullOrEmpty("culprit", packet.Culprit);
+                Write("event_id", packet.EventID);
+                Write("project", packet.Project);
+                Write("culprit", packet.Culprit);
 
                 writer.WritePropertyName("level");
                 writer.WriteValue(packet.Level);
@@ -206,16 +200,14 @@ namespace SharpRaven.Data {
                 writer.WritePropertyName("timestamp");
                 writer.WriteValue(packet.TimeStamp.ToString("s", CultureInfo.InvariantCulture));
 
-                WritePropertyIfNotNullOrEmpty("logger", packet.Logger);
-                WritePropertyIfNotNullOrEmpty("platform", packet.Platform);
-                WritePropertyIfNotNullOrEmpty("message", packet.Message);
-                WriteDictionaryPropertyIfNotNull("tags", packet.Tags);
+                Write("logger", packet.Logger);
+                Write("platform", packet.Platform);
+                Write("message", packet.Message);
+                Write("tags", packet.Tags);
 
-                // Todo: 'extra' object?
-
-                WritePropertyIfNotNullOrEmpty("message", packet.ServerName);
-                WriteException(packet.Exception);
-                WriteStackTraceIfNotNullOrEmpty(packet.StackTrace);
+                Write("message", packet.ServerName);
+                Write(packet.Exception);
+                Write(packet.StackTrace);
 
             }
             writer.WriteEndObject();
@@ -223,7 +215,7 @@ namespace SharpRaven.Data {
             return stringWriter.ToString();
         }
 
-        private void WritePropertyIfNotNullOrEmpty(string name, string propertyValue) {
+        private void Write(string name, string propertyValue) {
             if (string.IsNullOrEmpty(propertyValue)) {
                 return;
             }
@@ -231,7 +223,7 @@ namespace SharpRaven.Data {
             writer.WriteValue(propertyValue);
         }
 
-        private void WriteDictionaryPropertyIfNotNull(string name, IDictionary<string, string> d) {
+        private void Write(string name, IDictionary<string, string> d) {
             if (d == null) {
                 return;
             }
@@ -261,18 +253,18 @@ namespace SharpRaven.Data {
             writer.WriteEndObject();
         }
 
-        private void WriteException(SentryException exception) {
+        private void Write(SentryException exception) {
             writer.WritePropertyName("sentry.interfaces.Exception");
             writer.WriteStartObject();
             {
-                WritePropertyIfNotNullOrEmpty("type", exception.Type);
-                WritePropertyIfNotNullOrEmpty("value", exception.Value);
-                WritePropertyIfNotNullOrEmpty("module", exception.Module);
+                Write("type", exception.Type);
+                Write("value", exception.Value);
+                Write("module", exception.Module);
             }
             writer.WriteEndObject();
         }
 
-        private void WriteStackTraceIfNotNullOrEmpty(SentryStacktrace trace) {
+        private void Write(SentryStacktrace trace) {
             if (trace == null || trace.Frames.Count == 0) {
                 return;
             }
@@ -286,13 +278,13 @@ namespace SharpRaven.Data {
                     var frame = trace.Frames[i];
                     writer.WriteStartObject();
                     {
-                        WritePropertyIfNotNullOrEmpty("abs_path", frame.AbsolutePath);
-                        WritePropertyIfNotNullOrEmpty("filename", frame.Filename);
-                        WritePropertyIfNotNullOrEmpty("module", frame.Module);
-                        WritePropertyIfNotNullOrEmpty("function", frame.Function);
-                        WriteDictionaryPropertyIfNotNull("vars", frame.Vars);
-                        WritePropertyIfNotNullOrEmpty("lineno", frame.LineNumber.ToString());
-                        WritePropertyIfNotNullOrEmpty("colno", frame.ColumnNumber.ToString());
+                        Write("abs_path", frame.AbsolutePath);
+                        Write("filename", frame.Filename);
+                        Write("module", frame.Module);
+                        Write("function", frame.Function);
+                        Write("vars", frame.Vars);
+                        Write("lineno", frame.LineNumber.ToString());
+                        Write("colno", frame.ColumnNumber.ToString());
                         // Todo: pre_context, in_app, post_context
                     }
                     writer.WriteEndObject();

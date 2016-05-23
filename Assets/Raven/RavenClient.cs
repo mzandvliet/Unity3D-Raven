@@ -57,83 +57,46 @@ namespace SharpRaven
             _wwwPool = new WWWPool(16);
         }
 
-        public int CaptureException(Exception e)
-        {
-            return CaptureException(e, null, null);
-        }
-
-        ///
-        /// @kims
-        /// NOTE:
-        ///   Commented out secound paramter not to have default paramter due to Unity3d does not resolve that.
-        ///
-        public int CaptureException(Exception e, Dictionary<string, string> tags /*= null*/)
-        {
-            return CaptureException(e, tags, null);
-        }
-
         ///
         /// @kims
         /// NOTE:
         ///   Commented out secound paramter not to have default paramter due to Unity3d does not resolve that.
         ///		
-        public int CaptureException(Exception e, Dictionary<string, string> tags /*= null*/, object extra = null) {
+        public int CaptureException(Exception e, Dictionary<string, string> tags = null) {
             JsonPacket packet = _packetPool.Take();
             packet.Create(CurrentDSN.ProjectID, e);
             packet.Level = ErrorLevel.error;
             packet.Tags = tags;
-            packet.Extra = extra;
 
             Send(packet, CurrentDSN);
 
             return 0;
         }
 
-        public int CaptureUnityLog(string log, string stack, LogType logType, Dictionary<string, string> tags = null,
-            object extra = null)
+        public int CaptureUnityLog(string log, string stack, LogType logType, Dictionary<string, string> tags)
         {
             JsonPacket packet = _packetPool.Take();
             packet.Create(CurrentDSN.ProjectID, log, stack, logType);
             packet.Level = ErrorLevel.error;
             packet.Tags = tags;
-            packet.Extra = extra;
 
             Send(packet, CurrentDSN);
 
             return 0;
         }
 
-        public int CaptureMessage(string message)
-        {
-            return CaptureMessage(message, ErrorLevel.info, null, null);
-        }
-
-        public int CaptureMessage(string message, ErrorLevel level)
-        {
-            return CaptureMessage(message, level, null, null);
-        }
-
         public int CaptureMessage(string message, ErrorLevel level, Dictionary<string, string> tags)
-        {
-            return CaptureMessage(message, level, tags, null);
-        }
-
-        public int CaptureMessage(string message, ErrorLevel level /*= ErrorLevel.info*/,
-            Dictionary<string, string> tags /*= null*/, object extra /*= null*/)
         {
             JsonPacket packet = new JsonPacket();
             packet.Project = CurrentDSN.ProjectID;
             packet.Message = message;
             packet.Level = level;
             packet.Tags = tags;
-            packet.Extra = extra;
 
             Send(packet, CurrentDSN);
 
             return 0;
         }
-
-        // Todo: pool www objects, let their queries finish, handle result/error
 
         public bool Send(JsonPacket packet, DSN dsn)
         {
@@ -144,7 +107,7 @@ namespace SharpRaven
             packet.Logger = Logger;
 
             string authHeader = PacketBuilder.CreateAuthenticationHeader(dsn);
-            //            Debug.Log("Header: " + authHeader);
+//            Debug.Log("Header: " + authHeader);
 
             _postHeader.Clear();
             _postHeader.Add("ContentType", "application/json");
@@ -173,12 +136,12 @@ namespace SharpRaven
                 yield return null;
             }
             
-            if (!string.IsNullOrEmpty(www.error)) {
-                Debug.LogError("Failed: " + www.error);
-            }
-            else {
-                Debug.Log("Response: " + www.text);
-            }
+//            if (!string.IsNullOrEmpty(www.error)) {
+//                Debug.LogError("Failed to send error to Sentry: " + www.error);
+//            }
+//            else {
+//                Debug.Log("Sentry response: " + www.text);
+//            }
 
             _wwwPool.Return(www);
         }
@@ -205,7 +168,7 @@ namespace SharpRaven
     }
 
     public class JsonPacketPool {
-        private Queue<JsonPacket> _pool;
+        private readonly Queue<JsonPacket> _pool;
 
         public JsonPacketPool(int size) {
             _pool = new Queue<JsonPacket>(size);
@@ -231,7 +194,7 @@ namespace SharpRaven
     }
 
     public class WWWPool {
-        private Queue<WWW> _pool;
+        private readonly Queue<WWW> _pool;
 
         public WWWPool(int size) {
             _pool = new Queue<WWW>(size);

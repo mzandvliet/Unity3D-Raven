@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using System.Collections.Generic;
 using SharpRaven;
@@ -33,9 +34,12 @@ public class ErrorReporter : MonoBehaviour {
         Debug.Log("Private Key: " + _ravenClient.CurrentDSN.PrivateKey);
         Debug.Log("Project ID: " + _ravenClient.CurrentDSN.ProjectID);
 
+        // Todo: Include Volo Airsport version string
+        // Todo: Since these tags are always included, please just cache them in the jsonpacket or something.
+
         _clientInfo = new Dictionary<string, string>();
-        _clientInfo.Add("playTime", Time.realtimeSinceStartup.ToString());
-        _clientInfo.Add("time", System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:fff"));
+
+        _clientInfo.Add("Version", "v3.6.1");
 
         _clientInfo.Add("ProcessorType", SystemInfo.processorType);
         _clientInfo.Add("ProcessorCount", SystemInfo.processorCount.ToString());
@@ -53,12 +57,37 @@ public class ErrorReporter : MonoBehaviour {
         _clientInfo.Add("GPU-id", SystemInfo.graphicsDeviceID.ToString());
         _clientInfo.Add("GPU-Version", SystemInfo.graphicsDeviceVersion);
         _clientInfo.Add("GPU-ShaderLevel", SystemInfo.graphicsShaderLevel.ToString());
+
+        //_clientInfo.Add("playTime", Time.realtimeSinceStartup.ToString());
         //dic.Add("GPU-PixelFillrate", SystemInfo.graphicsPixelFillrate.ToString());		
     }
-	
-	private void HandleLog(string log, string stack, LogType type)
-	{
-		//ravenClient.CaptureMessage(log, SharpRaven.Data.ErrorLevel.error, dic, null);
-		_ravenClient.CaptureUnityLog(log, stack, type, _clientInfo);
-	}	
+
+    private void HandleLog(string log, string stack, LogType type) {
+	    bool send = false;
+
+        // Todo: make reporting level configurable
+	    switch (type) {
+	        case LogType.Error:
+	            send = true;
+	            break;
+	        case LogType.Assert:
+	            break;
+	        case LogType.Warning:
+	            send = true;
+	            break; 
+	        case LogType.Log:
+	            break;
+	        case LogType.Exception:
+                send = true;
+                break;
+	        default:
+	            throw new ArgumentOutOfRangeException("type", type, null);
+	    }
+
+        Debug.Log("received: " + log + "\n" + stack);
+
+	    if (send) {
+	        _ravenClient.CaptureUnityLog(log, stack, type, _clientInfo);
+        }
+    }
 }

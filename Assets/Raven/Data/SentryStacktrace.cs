@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 
 using Newtonsoft.Json;
 
@@ -16,10 +14,14 @@ namespace SharpRaven.Data {
             Frames = new List<ExceptionFrame>(8);
         }
 
+        // Todo: Simplify into a string.split operation, we're not getting more out of this than contained in e.trace string anyway
+
         public void Create(Exception e) {
             StackTrace trace = new StackTrace(e, true);
 
-            Frames = (trace.GetFrames() ?? new StackFrame[0]).Reverse().Select(frame => {
+            for (int i = 0; i < trace.FrameCount; i++) {
+                var frame = trace.GetFrame(i);
+
                 int lineNo = frame.GetFileLineNumber();
 
                 if (lineNo == 0) {
@@ -28,7 +30,7 @@ namespace SharpRaven.Data {
                 }
 
                 var method = frame.GetMethod();
-                return new ExceptionFrame() {
+                var frameData = new ExceptionFrame() {
                     Filename = frame.GetFileName(),
                     Module = (method.DeclaringType != null) ? method.DeclaringType.FullName : null,
                     Function = method.Name,
@@ -36,7 +38,9 @@ namespace SharpRaven.Data {
                     LineNumber = lineNo,
                     ColumnNumber = frame.GetFileColumnNumber()
                 };
-            }).ToList();
+
+                Frames.Add(frameData);
+            }
         }
 
         public void Clear() {
