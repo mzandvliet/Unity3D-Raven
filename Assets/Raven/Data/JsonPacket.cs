@@ -97,53 +97,12 @@ namespace SharpRaven.Data {
         [JsonProperty(PropertyName = "sentry.interfaces.Stacktrace", NullValueHandling = NullValueHandling.Ignore)]
         public SentryStacktrace StackTrace { get; set; }
 
-        public JsonPacket(string project) {
-            Initialize();
-            Project = project;
+        public JsonPacket() {
+            Tags = new Dictionary<string, string>(4);
+            Modules = new List<Module>(4);
+            Exception = new SentryException();
+            StackTrace = new SentryStacktrace();
         }
-
-        public JsonPacket(string project, Exception e) {
-            Initialize();
-            Message = e.Message;
-
-			if (e.TargetSite != null)
-			{
-// ReSharper disable ConditionIsAlwaysTrueOrFalse => not for dynamic types.
-                Culprit = String.Format("{0} in {1}", ((e.TargetSite.ReflectedType == null) ? "<dynamic type>" : e.TargetSite.ReflectedType.FullName), e.TargetSite.Name);
-// ReSharper restore ConditionIsAlwaysTrueOrFalse
-			}
-
-            Project = project;
-            ServerName = System.Environment.MachineName;
-            Level = ErrorLevel.error;
-
-            Exception = new SentryException(e);
-            Exception.Module = e.Source;
-            Exception.Type = e.GetType().Name;
-            Exception.Value = e.Message;
-
-            StackTrace = new SentryStacktrace(e);
-            if (StackTrace.Frames.Count == 0) {
-                StackTrace = null;
-            }
-        }
-		
-		public JsonPacket(string project, string log, string stack, LogType logType)
-		{
-			Initialize();
-			Message = log;
-			
-            Project = project;
-            ServerName = System.Environment.MachineName;
-            Level = ErrorLevel.error;
-			
-			Exception = new SentryException(log, stack, logType);
-			Exception.Module = log;
-			Exception.Type = logType.ToString();
-			Exception.Value = stack;
-			
-			StackTrace = null; 
-		}
 
         private void Initialize() {
             // Get assemblies.
@@ -154,20 +113,61 @@ namespace SharpRaven.Data {
                     Version = m.ModuleVersionId.ToString()
                 });
             }*/
+
+            // Create a guid.
+            EventID = GenerateGuid();
             // The current hostname
-            ServerName = System.Environment.MachineName;
+            ServerName = Environment.MachineName;
             // Create timestamp
             TimeStamp = DateTime.UtcNow;
             // Default logger.
             Logger = "root";
             // Default error level.
             Level = ErrorLevel.error;
-            // Create a guid.
-            EventID = GenerateGuid();
+            
             // Project
             Project = "default";
             // Platform
             Platform = "csharp";
+        }
+
+        public void Create(string project, Exception e) {
+            Initialize();
+            Message = e.Message;
+
+            var targetSite = e.TargetSite;
+			if (targetSite != null) {
+                Culprit = String.Format("{0} in {1}", ((targetSite.ReflectedType == null) ? "<dynamic type>" : targetSite.ReflectedType.FullName), targetSite.Name);
+			}
+
+            Project = project;
+            Level = ErrorLevel.error;
+
+            Exception.Module = e.Source;
+            Exception.Type = e.GetType().Name;
+            Exception.Value = e.Message;
+
+            StackTrace.Create(e);
+        }
+        
+		public void Create(string project, string log, string stack, LogType logType)
+		{
+			Initialize();
+			Message = log;
+			
+            Project = project;
+            Level = ErrorLevel.error;
+			
+			Exception.Module = log;
+			Exception.Type = logType.ToString();
+			Exception.Value = stack;
+			
+			StackTrace = null; 
+		}
+
+        public void Clear() {
+            Exception.Clear();
+            StackTrace.Clear();
         }
 
         private static string GenerateGuid() {

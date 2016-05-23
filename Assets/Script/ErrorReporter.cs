@@ -64,7 +64,7 @@ public class ErrorReporter : MonoBehaviour {
 		
 		//ravenClient.CaptureMessage(log, SharpRaven.Data.ErrorLevel.error, dic, null);
 		
-		ravenClient.CaptureUntiyLog(log, stack, type, dic, null);
+		ravenClient.CaptureUnityLog(log, stack, type, dic, null);
 		
 	}	
 }

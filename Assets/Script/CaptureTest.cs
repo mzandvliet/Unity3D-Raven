@@ -7,7 +7,7 @@ using System;
 public class CaptureTest : MonoBehaviour {
     [SerializeField] private string _dsnUrl = "http://pub:priv@app.getsentry.com/12345";
 
-    static RavenClient ravenClient;
+    private RavenClient _ravenClient;
 
 	void Start () 
 	{	
@@ -18,49 +18,33 @@ public class CaptureTest : MonoBehaviour {
     {
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            //for (int i = 0; i < 16; i++) {
                 testWithoutStacktrace();
                 testWithStacktrace();
-            //}
         }
-
-        //testWithStacktrace();
     }
 
     void setup()
     {
-        //Debug.Log("Initializing RavenClient.");
-        ravenClient = new RavenClient(_dsnUrl);
-        ravenClient.Logger = "C#";
-        ravenClient.LogScrubber = new SharpRaven.Logging.LogScrubber();
-
-//        Debug.Log("Sentry Uri: " + ravenClient.CurrentDSN.SentryURI);
-//        Debug.Log("Port: " + ravenClient.CurrentDSN.Port);
-//        Debug.Log("Public Key: " + ravenClient.CurrentDSN.PublicKey);
-//        Debug.Log("Private Key: " + ravenClient.CurrentDSN.PrivateKey);
-//        Debug.Log("Project ID: " + ravenClient.CurrentDSN.ProjectID);
+        _ravenClient = new RavenClient(_dsnUrl, this);
+        _ravenClient.Logger = "C#";
+        _ravenClient.LogScrubber = new LogScrubber();
     }
 
 	
     void testWithoutStacktrace()
     {
-//            Debug.Log("Send exception without stacktrace.");
-            var id = ravenClient.CaptureException(new Exception("Test without a stacktrace"));
-//            Debug.Log("Sent packet: " + id);
+            _ravenClient.CaptureException(new Exception("Test without a stacktrace"));
     }
 
     void testWithStacktrace()
     {
-//        Debug.Log("Causing division by zero exception.");
         try
         {
             PerformDivideByZero();
         }
         catch (Exception e)
         {
-//            Debug.Log("Captured: " + e.Message);
-            var id = ravenClient.CaptureException(e);
-//            Debug.Log("Sent packet: " + id);
+            _ravenClient.CaptureException(e);
         }
     }
 

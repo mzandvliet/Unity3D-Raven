@@ -9,22 +9,26 @@ using Newtonsoft.Json;
 
 namespace SharpRaven.Data {
     public class SentryStacktrace {
-        public SentryStacktrace(Exception e) {
+        [JsonProperty(PropertyName = "frames")]
+        public List<ExceptionFrame> Frames;
+
+        public SentryStacktrace() {
+            Frames = new List<ExceptionFrame>(8);
+        }
+
+        public void Create(Exception e) {
             StackTrace trace = new StackTrace(e, true);
 
-            Frames = (trace.GetFrames() ?? new StackFrame[0]).Reverse().Select(frame =>
-            {
+            Frames = (trace.GetFrames() ?? new StackFrame[0]).Reverse().Select(frame => {
                 int lineNo = frame.GetFileLineNumber();
 
-                if (lineNo == 0)
-                {
+                if (lineNo == 0) {
                     //The pdb files aren't currently available
                     lineNo = frame.GetILOffset();
                 }
 
                 var method = frame.GetMethod();
-                return new ExceptionFrame()
-                {
+                return new ExceptionFrame() {
                     Filename = frame.GetFileName(),
                     Module = (method.DeclaringType != null) ? method.DeclaringType.FullName : null,
                     Function = method.Name,
@@ -35,8 +39,8 @@ namespace SharpRaven.Data {
             }).ToList();
         }
 
-        [JsonProperty(PropertyName = "frames")]
-        public List<ExceptionFrame> Frames;
-
+        public void Clear() {
+            Frames.Clear();
+        }
     }
 }

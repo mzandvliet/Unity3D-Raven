@@ -20,17 +20,20 @@ namespace SharpRaven.Data {
         [JsonProperty(PropertyName = "module")]
         public string Module;
 
+        public SentryException() {
+            
+        }
+
         public SentryException(Exception e) {
             this.Module = e.Source;
             this.Type = e.Message;
             this.Value = e.Message;
         }
-		
-		public SentryException(string log, string stack, LogType logType)
-		{
-            this.Module = log;
-            this.Type = logType.ToString();
-            this.Value = stack;			
-		}
+
+        public void Clear() {
+            Type = null;
+            Value = null;
+            Module = null;
+        }
     }
 }

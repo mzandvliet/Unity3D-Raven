@@ -1,18 +1,12 @@
 ﻿using UnityEngine;
+using System.Collections;
 using System;
 using SharpRaven.Data;
-using System.Net;
-using System.IO;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Threading;
 using Newtonsoft.Json;
 using SharpRaven.Utilities;
 using SharpRaven.Logging;
-using UnityEngine.Experimental.Networking;
 
 namespace SharpRaven
 {
@@ -41,22 +35,26 @@ namespace SharpRaven
         public string Logger { get; set; }
 
         private readonly Dictionary<string, string> _postHeader;
-        private readonly WWW _www;
         private readonly UTF8Encoding _encoding;
         private readonly JsonPacketSerializer _packetSerializer;
+        private readonly JsonPacketPool _packetPool;
+        private readonly WWWPool _wwwPool;
+        private readonly MonoBehaviour _routineRunner;
 
-        public RavenClient(string dsn) : this(new DSN(dsn)) { }
+        public RavenClient(string dsn, MonoBehaviour routineRunner) : this(new DSN(dsn), routineRunner) { }
 
-        public RavenClient(DSN dsn)
+        public RavenClient(DSN dsn, MonoBehaviour routineRunner)
         {
             CurrentDSN = dsn;
+            _routineRunner = routineRunner;
             Compression = true;
             Logger = "root";
 
             _postHeader = new Dictionary<string, string>();
-            _www = new WWW("");
             _encoding = new UTF8Encoding();
             _packetSerializer = new JsonPacketSerializer();
+            _packetPool = new JsonPacketPool(16);
+            _wwwPool = new WWWPool(16);
         }
 
         public int CaptureException(Exception e)
@@ -79,9 +77,9 @@ namespace SharpRaven
         /// NOTE:
         ///   Commented out secound paramter not to have default paramter due to Unity3d does not resolve that.
         ///		
-        public int CaptureException(Exception e, Dictionary<string, string> tags /*= null*/, object extra = null)
-        {
-            JsonPacket packet = new JsonPacket(CurrentDSN.ProjectID, e);
+        public int CaptureException(Exception e, Dictionary<string, string> tags /*= null*/, object extra = null) {
+            JsonPacket packet = _packetPool.Take();
+            packet.Create(CurrentDSN.ProjectID, e);
             packet.Level = ErrorLevel.error;
             packet.Tags = tags;
             packet.Extra = extra;
@@ -91,10 +89,11 @@ namespace SharpRaven
             return 0;
         }
 
-        public int CaptureUntiyLog(string log, string stack, LogType logType, Dictionary<string, string> tags = null,
+        public int CaptureUnityLog(string log, string stack, LogType logType, Dictionary<string, string> tags = null,
             object extra = null)
         {
-            JsonPacket packet = new JsonPacket(CurrentDSN.ProjectID, log, stack, logType);
+            JsonPacket packet = _packetPool.Take();
+            packet.Create(CurrentDSN.ProjectID, log, stack, logType);
             packet.Level = ErrorLevel.error;
             packet.Tags = tags;
             packet.Extra = extra;
@@ -122,7 +121,8 @@ namespace SharpRaven
         public int CaptureMessage(string message, ErrorLevel level /*= ErrorLevel.info*/,
             Dictionary<string, string> tags /*= null*/, object extra /*= null*/)
         {
-            JsonPacket packet = new JsonPacket(CurrentDSN.ProjectID);
+            JsonPacket packet = new JsonPacket();
+            packet.Project = CurrentDSN.ProjectID;
             packet.Message = message;
             packet.Level = level;
             packet.Tags = tags;
@@ -137,6 +137,10 @@ namespace SharpRaven
 
         public bool Send(JsonPacket packet, DSN dsn)
         {
+            if (_wwwPool.Count == 0) {
+                Debug.LogWarning("Skipping GetSentry exception upload, too many sends...\n" + packet.Exception);
+            }
+
             packet.Logger = Logger;
 
             string authHeader = PacketBuilder.CreateAuthenticationHeader(dsn);
@@ -149,25 +153,34 @@ namespace SharpRaven
             string[] headers = FlattenedHeadersFrom(_postHeader);
 
             string data = _packetSerializer.Serialize(packet, Formatting.None);
+            _packetPool.Return(packet);
+
 //            if (LogScrubber != null)
 //                data = LogScrubber.Scrub(data);
 
             //Debug.Log("Packet: " + data);
 
-            _www.InitWWW(dsn.SentryURI, _encoding.GetBytes(data), headers);
-
-//            while (!_www.isDone) {
-//                Thread.Sleep(5);
-//            }
-//
-//            if (!string.IsNullOrEmpty(_www.error)) {
-//                Debug.LogError("Failed: " + _www.error);
-//            }
-//            else {
-//                Debug.Log("Response: " + _www.text);
-//            }
+            _routineRunner.StartCoroutine(SendAsync(dsn, data, headers));
 
             return true;
+        }
+
+        private IEnumerator SendAsync(DSN dsn, string data, string[] headers) {
+            var www = _wwwPool.Take();
+            www.InitWWW(dsn.SentryURI, _encoding.GetBytes(data), headers);
+
+            while (!www.isDone) {
+                yield return null;
+            }
+            
+            if (!string.IsNullOrEmpty(www.error)) {
+                Debug.LogError("Failed: " + www.error);
+            }
+            else {
+                Debug.Log("Response: " + www.text);
+            }
+
+            _wwwPool.Return(www);
         }
 
         private static string[] _flattenedHeaders;
@@ -188,6 +201,61 @@ namespace SharpRaven
                 }
             }
             return _flattenedHeaders;
+        }
+    }
+
+    public class JsonPacketPool {
+        private Queue<JsonPacket> _pool;
+
+        public JsonPacketPool(int size) {
+            _pool = new Queue<JsonPacket>(size);
+
+            for (int i = 0; i < size; i++) {
+                var packet = new JsonPacket();
+                _pool.Enqueue(packet);
+            }
+        } 
+
+        public JsonPacket Take() {
+            if (_pool.Count == 0) {
+                throw new Exception("Pool is empty");
+            }
+
+            return _pool.Dequeue();
+        }
+
+        public void Return(JsonPacket packet) {
+            packet.Clear();
+            _pool.Enqueue(packet);
+        }
+    }
+
+    public class WWWPool {
+        private Queue<WWW> _pool;
+
+        public WWWPool(int size) {
+            _pool = new Queue<WWW>(size);
+
+            for (int i = 0; i < size; i++) {
+                var item = new WWW("");
+                _pool.Enqueue(item);
+            }
+        }
+
+        public WWW Take() {
+            if (_pool.Count == 0) {
+                throw new Exception("Pool is empty");
+            }
+
+            return _pool.Dequeue();
+        }
+
+        public void Return(WWW item) {
+            _pool.Enqueue(item);
+        }
+
+        public int Count {
+            get { return _pool.Count; }
         }
     }
 }
