@@ -19,9 +19,9 @@ public class CaptureTest : MonoBehaviour {
     {
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            for (int i = 0; i < 16; i++) {
+            //for (int i = 0; i < 16; i++) {
                 testWithoutStacktrace();
-            }
+            //}
         }
 
         //testWithStacktrace();
@@ -45,7 +45,7 @@ public class CaptureTest : MonoBehaviour {
     static void testWithoutStacktrace()
     {
 //            Debug.Log("Send exception without stacktrace.");
-            var id = ravenClient.CaptureException(new Exception("Test without a stacktrace."));
+            var id = ravenClient.CaptureException(new Exception("Test without a stacktrace"));
 //            Debug.Log("Sent packet: " + id);
     }
 

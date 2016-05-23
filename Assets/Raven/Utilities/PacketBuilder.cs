@@ -13,7 +13,6 @@ namespace SharpRaven.Utilities {
         public static string CreateAuthenticationHeader(DSN dsn) {
             if (_builder == null) {
                 _builder = new StringBuilder(2048);
-                _builder.Append("hello world");
             }
 
             //_builder.Remove(0, _builder.Length);
@@ -32,8 +31,8 @@ namespace SharpRaven.Utilities {
 
             _builder.Append(", sentry_client=SharpRaven/1.0");
 
-            //return _builder.ToString();
-            return GarbageFreeString(_builder);
+            return _builder.ToString();
+            //return GarbageFreeString(_builder);
                 
 //            string header = String.Empty;
 //            header += "Sentry sentry_version=2.0";

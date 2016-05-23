@@ -40,8 +40,8 @@ namespace SharpRaven
         /// </summary>
         public string Logger { get; set; }
 
-        private readonly Dictionary<string, string> _postHeader;
         private readonly WWW _www;
+        private readonly UTF8Encoding _encoding;
         private readonly MyJsonSerializer _serializer;
 
         public RavenClient(string dsn) : this(new DSN(dsn)) { }
@@ -52,8 +52,8 @@ namespace SharpRaven
             Compression = true;
             Logger = "root";
 
-            _postHeader = new Dictionary<string, string>();
             _www = new WWW("");
+            _encoding = new UTF8Encoding();
             _serializer = new MyJsonSerializer(null);
         }
 
@@ -136,57 +136,40 @@ namespace SharpRaven
             packet.Logger = Logger;
 
             string authHeader = PacketBuilder.CreateAuthenticationHeader(dsn);
+//            Debug.Log("Header: " + authHeader);
 
-            _postHeader.Clear();
-            _postHeader.Add("ContentType", "application/json");
-            _postHeader.Add("User-Agent", "RavenSharp/1.0");
-            _postHeader.Add("X-Sentry-Auth", authHeader);
-            string[] headers = FlattenedHeadersFrom(_postHeader);
+            UnityWebRequest r = new UnityWebRequest(dsn.SentryURI);
+            r.method = "POST";
+            //r.SetRequestHeader("ContentType", "application/json");
+            //r.SetRequestHeader("User-Agent", "RavenSharp/1.0");
+            r.SetRequestHeader("X-Sentry-Auth", authHeader);
 
-            string data = _serializer.Serialize(packet, Formatting.None); //packet.Serialize());
+            string data = _serializer.Serialize(packet, Formatting.None);
 //            if (LogScrubber != null)
 //                data = LogScrubber.Scrub(data);
 
-//            Debug.Log("Header: " + authHeader);
-//            Debug.Log("Packet: " + data);
+            Debug.Log("Packet: " + data);
 
-            var encoding = new System.Text.UTF8Encoding();
+            UploadHandler uploadHandler = new UploadHandlerRaw(_encoding.GetBytes(data));
+            uploadHandler.contentType = "application/json";
+            DownloadHandler downloadHandler = new DownloadHandlerBuffer();
+            r.uploadHandler = uploadHandler;
+            r.downloadHandler = downloadHandler;
 
-            _www.InitWWW(dsn.SentryURI, encoding.GetBytes(data), headers);
-//            while (!www.isDone)
-//            {
-//                Thread.Sleep(5);
-//            }
-//
-//            Debug.Log("Got: " + www.text);
+            r.Send();
+
+            while (!r.isDone && !r.isError) {
+                Thread.Sleep(5);
+            }
+
+            if (r.isError) {
+                Debug.LogError("Failed: " + r.error);
+            }
+            else {
+                Debug.Log("Response: " + r.downloadHandler.text);
+            }
 
             return true;
-        }
-
-        // Todo: garbage control
-        private static string[] FlattenedHeadersFrom(Dictionary<string, string> headers) {
-            if (headers == null)
-                return (string[])null;
-            string[] strArray1 = new string[headers.Count * 2];
-            int num1 = 0;
-            using (Dictionary<string, string>.Enumerator enumerator = headers.GetEnumerator()) {
-                while (enumerator.MoveNext()) {
-                    KeyValuePair<string, string> current = enumerator.Current;
-                    string[] strArray2 = strArray1;
-                    int index1 = num1;
-                    int num2 = 1;
-                    int num3 = index1 + num2;
-                    string str1 = current.Key.ToString();
-                    strArray2[index1] = str1;
-                    string[] strArray3 = strArray1;
-                    int index2 = num3;
-                    int num4 = 1;
-                    num1 = index2 + num4;
-                    string str2 = current.Value.ToString();
-                    strArray3[index2] = str2;
-                }
-            }
-            return strArray1;
         }
     }
 

@@ -38,7 +38,7 @@ namespace SharpRaven.Data {
         /// Defaults to DateTime.UtcNow()
         /// </summary>
         [JsonProperty(PropertyName = "timestamp", NullValueHandling = NullValueHandling.Ignore)]
-        public DateTime TimeStamp { get; set; }
+        public long TimeStamp { get; set; }
 
         /// <summary>
         /// The name of the logger which created the record.
@@ -154,7 +154,7 @@ namespace SharpRaven.Data {
             // The current hostname
             ServerName = System.Environment.MachineName;
             // Create timestamp
-            TimeStamp = DateTime.UtcNow;
+            TimeStamp = (long) (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;//DateTime.UtcNow;
             // Default logger.
             Logger = "root";
             // Default error level.
