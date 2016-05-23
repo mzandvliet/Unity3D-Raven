@@ -40,6 +40,7 @@ namespace SharpRaven
         /// </summary>
         public string Logger { get; set; }
 
+        private readonly Dictionary<string, string> _postHeader;
         private readonly WWW _www;
         private readonly UTF8Encoding _encoding;
         private readonly MyJsonSerializer _serializer;
@@ -52,6 +53,7 @@ namespace SharpRaven
             Compression = true;
             Logger = "root";
 
+            _postHeader = new Dictionary<string, string>();
             _www = new WWW("");
             _encoding = new UTF8Encoding();
             _serializer = new MyJsonSerializer(null);
@@ -136,40 +138,54 @@ namespace SharpRaven
             packet.Logger = Logger;
 
             string authHeader = PacketBuilder.CreateAuthenticationHeader(dsn);
-//            Debug.Log("Header: " + authHeader);
+            //            Debug.Log("Header: " + authHeader);
 
-            UnityWebRequest r = new UnityWebRequest(dsn.SentryURI);
-            r.method = "POST";
-            //r.SetRequestHeader("ContentType", "application/json");
-            //r.SetRequestHeader("User-Agent", "RavenSharp/1.0");
-            r.SetRequestHeader("X-Sentry-Auth", authHeader);
+            _postHeader.Clear();
+            _postHeader.Add("ContentType", "application/json");
+            _postHeader.Add("User-Agent", "RavenSharp/1.0");
+            _postHeader.Add("X-Sentry-Auth", authHeader);
+            string[] headers = FlattenedHeadersFrom(_postHeader);
 
             string data = _serializer.Serialize(packet, Formatting.None);
 //            if (LogScrubber != null)
 //                data = LogScrubber.Scrub(data);
 
-            Debug.Log("Packet: " + data);
+            //Debug.Log("Packet: " + data);
 
-            UploadHandler uploadHandler = new UploadHandlerRaw(_encoding.GetBytes(data));
-            uploadHandler.contentType = "application/json";
-            DownloadHandler downloadHandler = new DownloadHandlerBuffer();
-            r.uploadHandler = uploadHandler;
-            r.downloadHandler = downloadHandler;
+            _www.InitWWW(dsn.SentryURI, _encoding.GetBytes(data), headers);
 
-            r.Send();
-
-            while (!r.isDone && !r.isError) {
-                Thread.Sleep(5);
-            }
-
-            if (r.isError) {
-                Debug.LogError("Failed: " + r.error);
-            }
-            else {
-                Debug.Log("Response: " + r.downloadHandler.text);
-            }
+//            while (!_www.isDone) {
+//                Thread.Sleep(5);
+//            }
+//
+//            if (!string.IsNullOrEmpty(_www.error)) {
+//                Debug.LogError("Failed: " + _www.error);
+//            }
+//            else {
+//                Debug.Log("Response: " + _www.text);
+//            }
 
             return true;
+        }
+
+        private static string[] _flattenedHeaders;
+        private static string[] FlattenedHeadersFrom(Dictionary<string, string> headers) {
+            if (headers == null)
+                return null;
+
+            if (_flattenedHeaders == null) {
+                _flattenedHeaders = new string[headers.Count*2];
+            }
+
+            int i = 0;
+            using (Dictionary<string, string>.Enumerator enumerator = headers.GetEnumerator()) {
+                while (enumerator.MoveNext()) {
+                    var current = enumerator.Current;
+                    _flattenedHeaders[i] = current.Key;
+                    _flattenedHeaders[i + 1] = current.Value;
+                }
+            }
+            return _flattenedHeaders;
         }
     }
 
@@ -185,7 +201,8 @@ namespace SharpRaven
         }
 
         public string Serialize(object value, Formatting formatting) {
-            stringWriter.GetStringBuilder().Remove(0, stringWriter.GetStringBuilder().Length);
+            //stringWriter.GetStringBuilder().Remove(0, stringWriter.GetStringBuilder().Length);
+            stringWriter.GetStringBuilder().Length = 0;
             jsonTextWriter.Formatting = formatting;
             jsonSerializer.Serialize(jsonTextWriter, value);
             return stringWriter.ToString();
