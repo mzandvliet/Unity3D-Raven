@@ -2,6 +2,7 @@
 using System;
 using Newtonsoft.Json;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 
 namespace SharpRaven.Data {
     public class JsonPacket {
@@ -159,11 +160,16 @@ namespace SharpRaven.Data {
             // Default error level.
             Level = ErrorLevel.error;
             // Create a guid.
-            EventID = Guid.NewGuid().ToString().Replace("-", String.Empty);
+            EventID = GenerateGuid();
             // Project
             Project = "default";
             // Platform
             Platform = "csharp";
+        }
+
+        private static string GenerateGuid() {
+            //return Guid.NewGuid().ToString().Replace("-", String.Empty);
+            return Guid.NewGuid().ToString("N");
         }
 
         /// <summary>

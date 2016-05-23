@@ -13,44 +13,54 @@ public class CaptureTest : MonoBehaviour {
 	void Start () 
 	{	
 		setup();
-        testWithoutStacktrace();
-        testWithStacktrace();
+    }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            for (int i = 0; i < 16; i++) {
+                testWithoutStacktrace();
+            }
+        }
+
+        //testWithStacktrace();
     }
 
     static void setup()
     {
-        Debug.Log("Initializing RavenClient.");
+        //Debug.Log("Initializing RavenClient.");
         ravenClient = new RavenClient(dsnUrl);
         ravenClient.Logger = "C#";
         ravenClient.LogScrubber = new SharpRaven.Logging.LogScrubber();
 
-        Debug.Log("Sentry Uri: " + ravenClient.CurrentDSN.SentryURI);
-        Debug.Log("Port: " + ravenClient.CurrentDSN.Port);
-        Debug.Log("Public Key: " + ravenClient.CurrentDSN.PublicKey);
-        Debug.Log("Private Key: " + ravenClient.CurrentDSN.PrivateKey);
-        Debug.Log("Project ID: " + ravenClient.CurrentDSN.ProjectID);
+//        Debug.Log("Sentry Uri: " + ravenClient.CurrentDSN.SentryURI);
+//        Debug.Log("Port: " + ravenClient.CurrentDSN.Port);
+//        Debug.Log("Public Key: " + ravenClient.CurrentDSN.PublicKey);
+//        Debug.Log("Private Key: " + ravenClient.CurrentDSN.PrivateKey);
+//        Debug.Log("Project ID: " + ravenClient.CurrentDSN.ProjectID);
     }
 
 	
     static void testWithoutStacktrace()
     {
-            Debug.Log("Send exception without stacktrace.");
+//            Debug.Log("Send exception without stacktrace.");
             var id = ravenClient.CaptureException(new Exception("Test without a stacktrace."));
-            Debug.Log("Sent packet: " + id);
+//            Debug.Log("Sent packet: " + id);
     }
 
     static void testWithStacktrace()
     {
-        Debug.Log("Causing division by zero exception.");
+//        Debug.Log("Causing division by zero exception.");
         try
         {
             PerformDivideByZero();
         }
         catch (Exception e)
         {
-            Debug.Log("Captured: " + e.Message);
+//            Debug.Log("Captured: " + e.Message);
             var id = ravenClient.CaptureException(e);
-            Debug.Log("Sent packet: " + id);
+//            Debug.Log("Sent packet: " + id);
         }
     }
 

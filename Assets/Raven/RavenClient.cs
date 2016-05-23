@@ -4,32 +4,20 @@ using SharpRaven.Data;
 using System.Net;
 using System.IO;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading;
 using Newtonsoft.Json;
 using SharpRaven.Utilities;
 using SharpRaven.Logging;
+using UnityEngine.Experimental.Networking;
 
 namespace SharpRaven
 {
     public class RavenClient
     {
-
-        /// 
-        /// To support WebClient on Android and iOS.
-        /// 
-        /// See http://www.vovchik.org/blog/13001 for more details
-        /// 
-        public class HttpRequestCreator : IWebRequestCreate
-        {
-            public WebRequest Create(Uri uri)
-            {
-                return HttpWebRequest.Create(uri);
-                //return new HttpWebRequest(uri);	
-            }
-        }
-
         /// <summary>
         /// The DSN currently being used to log exceptions.
         /// </summary>
@@ -52,28 +40,21 @@ namespace SharpRaven
         /// </summary>
         public string Logger { get; set; }
 
-        public RavenClient(string dsn)
-        {
+        private readonly Dictionary<string, string> _postHeader;
+        private readonly WWW _www;
+        private readonly MyJsonSerializer _serializer;
 
-            WebRequest.RegisterPrefix("http", new HttpRequestCreator());
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3;
-            ServicePointManager.ServerCertificateValidationCallback = UnsafeSecurityPolicy.Validator;
-
-            CurrentDSN = new DSN(dsn);
-            Compression = true;
-            Logger = "root";
-        }
+        public RavenClient(string dsn) : this(new DSN(dsn)) { }
 
         public RavenClient(DSN dsn)
         {
-
-            WebRequest.RegisterPrefix("http", new HttpRequestCreator());
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3;
-            ServicePointManager.ServerCertificateValidationCallback = UnsafeSecurityPolicy.Validator;
-
             CurrentDSN = dsn;
             Compression = true;
             Logger = "root";
+
+            _postHeader = new Dictionary<string, string>();
+            _www = new WWW("");
+            _serializer = new MyJsonSerializer(null);
         }
 
         public int CaptureException(Exception e)
@@ -156,76 +137,75 @@ namespace SharpRaven
 
             string authHeader = PacketBuilder.CreateAuthenticationHeader(dsn);
 
-            var postHeader = new Dictionary<string, string>();
-            postHeader.Add("ContentType", "application/json");
-            postHeader.Add("User-Agent", "RavenSharp/1.0");
-            postHeader.Add("X-Sentry-Auth", authHeader);
+            _postHeader.Clear();
+            _postHeader.Add("ContentType", "application/json");
+            _postHeader.Add("User-Agent", "RavenSharp/1.0");
+            _postHeader.Add("X-Sentry-Auth", authHeader);
+            string[] headers = FlattenedHeadersFrom(_postHeader);
 
-            string data = packet.Serialize();
-            if (LogScrubber != null)
-                data = LogScrubber.Scrub(data);
+            string data = _serializer.Serialize(packet, Formatting.None); //packet.Serialize());
+//            if (LogScrubber != null)
+//                data = LogScrubber.Scrub(data);
 
-            Debug.Log("Header: " + PacketBuilder.CreateAuthenticationHeader(dsn));
-            Debug.Log("Packet: " + data);
+//            Debug.Log("Header: " + authHeader);
+//            Debug.Log("Packet: " + data);
 
             var encoding = new System.Text.UTF8Encoding();
 
-            var www = new WWW(dsn.SentryURI, encoding.GetBytes(data), postHeader);
-
-            while (!www.isDone)
-            {
-                Thread.Sleep(5);
-            }
-
-            Debug.Log("Done!");
-
-            Debug.Log("Got: " + www.text);
+            _www.InitWWW(dsn.SentryURI, encoding.GetBytes(data), headers);
+//            while (!www.isDone)
+//            {
+//                Thread.Sleep(5);
+//            }
+//
+//            Debug.Log("Got: " + www.text);
 
             return true;
         }
 
-        #region Deprecated methods
-
-        ///
-        /// @kims
-        /// NOTE:
-        ///   Commented out the followings due to Unity3d spit out error because it treats them as ambigous methods.
-        ///		
-        /**
-         *  These methods have been deprectaed in favour of the ones
-         *  that have the same names as the other sentry clients, this
-         *  is purely for the sake of consistency
-         */
-/*         
-        [Obsolete("The more common CaptureException method should be used")]
-        public int CaptureEvent(Exception e)
-        {
-            return this.CaptureException(e);
+        // Todo: garbage control
+        private static string[] FlattenedHeadersFrom(Dictionary<string, string> headers) {
+            if (headers == null)
+                return (string[])null;
+            string[] strArray1 = new string[headers.Count * 2];
+            int num1 = 0;
+            using (Dictionary<string, string>.Enumerator enumerator = headers.GetEnumerator()) {
+                while (enumerator.MoveNext()) {
+                    KeyValuePair<string, string> current = enumerator.Current;
+                    string[] strArray2 = strArray1;
+                    int index1 = num1;
+                    int num2 = 1;
+                    int num3 = index1 + num2;
+                    string str1 = current.Key.ToString();
+                    strArray2[index1] = str1;
+                    string[] strArray3 = strArray1;
+                    int index2 = num3;
+                    int num4 = 1;
+                    num1 = index2 + num4;
+                    string str2 = current.Value.ToString();
+                    strArray3[index2] = str2;
+                }
+            }
+            return strArray1;
         }
-
-        [Obsolete("The more common CaptureException method should be used")]
-        public int CaptureEvent(Exception e, Dictionary<string, string> tags)
-        {
-            return this.CaptureException(e, tags);
-        }
-*/
-
-        #endregion
-
     }
 
-    public class UnsafeSecurityPolicy
-    {
-        public static bool Validator(
-            object sender,
-            X509Certificate certificate,
-            X509Chain chain,
-            SslPolicyErrors policyErrors)
-        {
+    public class MyJsonSerializer {
+        private JsonSerializer jsonSerializer;
+        private StringWriter stringWriter;
+        JsonTextWriter jsonTextWriter;
 
-            //*** Just accept and move on...
-            Debug.Log("Validation successful!");
-            return true;
+        public MyJsonSerializer(JsonSerializerSettings settings) {
+            jsonSerializer = JsonSerializer.Create(settings);
+            stringWriter = new StringWriter(new StringBuilder(128), (IFormatProvider)CultureInfo.InvariantCulture);
+            jsonTextWriter = new JsonTextWriter((TextWriter) stringWriter);
+        }
+
+        public string Serialize(object value, Formatting formatting) {
+            stringWriter.GetStringBuilder().Remove(0, stringWriter.GetStringBuilder().Length);
+            jsonTextWriter.Formatting = formatting;
+            jsonSerializer.Serialize(jsonTextWriter, value);
+            return stringWriter.ToString();
         }
     }
 }
