@@ -2,7 +2,10 @@
 using System;
 using Newtonsoft.Json;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace SharpRaven.Data {
     public class JsonPacket {
@@ -38,7 +41,7 @@ namespace SharpRaven.Data {
         /// Defaults to DateTime.UtcNow()
         /// </summary>
         [JsonProperty(PropertyName = "timestamp", NullValueHandling = NullValueHandling.Ignore)]
-        public long TimeStamp { get; set; }
+        public DateTime TimeStamp { get; set; }
 
         /// <summary>
         /// The name of the logger which created the record.
@@ -154,7 +157,7 @@ namespace SharpRaven.Data {
             // The current hostname
             ServerName = System.Environment.MachineName;
             // Create timestamp
-            TimeStamp = (long) (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;//DateTime.UtcNow;
+            TimeStamp = DateTime.UtcNow;
             // Default logger.
             Logger = "root";
             // Default error level.
@@ -171,21 +174,182 @@ namespace SharpRaven.Data {
             //return Guid.NewGuid().ToString().Replace("-", String.Empty);
             return Guid.NewGuid().ToString("N");
         }
-
-        /// <summary>
-        /// Turn into a JSON string.
-        /// </summary>
-        /// <returns>json string</returns>
-        public string Serialize() {
-            return JsonConvert.SerializeObject(this);
-
-            //return @"{""project"": ""SharpRaven"",""event_id"": ""fc6d8c0c43fc4630ad850ee518f1b9d0"",""culprit"": ""my.module.function_name"",""timestamp"": ""2012-11-11T17:41:36"",""message"": ""SyntaxError: Wattttt!"",""sentry.interfaces.Exception"": {""type"": ""SyntaxError"",""value"": ""Wattttt!"",""module"": ""__builtins__""}""}";
-        }
-
     }
 
     public class Module {
         public string Name;
         public string Version;
     }
+
+    public class JsonPacketSerializer {
+        private StringWriter stringWriter;
+        private JsonTextWriter writer;
+
+        public JsonPacketSerializer() {
+            stringWriter = new StringWriter(new StringBuilder(2048), (IFormatProvider)CultureInfo.InvariantCulture);
+            writer = new JsonTextWriter(stringWriter);
+        }
+
+        public string Serialize(JsonPacket packet, Formatting formatting) {
+            stringWriter.GetStringBuilder().Length = 0;
+            writer.Formatting = formatting;
+
+            writer.WriteStartObject();
+            {
+                WritePropertyIfNotNullOrEmpty("event_id", packet.EventID);
+                WritePropertyIfNotNullOrEmpty("project", packet.Project);
+                WritePropertyIfNotNullOrEmpty("culprit", packet.Culprit);
+
+                writer.WritePropertyName("level");
+                writer.WriteValue(packet.Level);
+
+                writer.WritePropertyName("timestamp");
+                writer.WriteValue(packet.TimeStamp.ToString("s", CultureInfo.InvariantCulture));
+
+                WritePropertyIfNotNullOrEmpty("logger", packet.Logger);
+                WritePropertyIfNotNullOrEmpty("platform", packet.Platform);
+                WritePropertyIfNotNullOrEmpty("message", packet.Message);
+                WriteDictionaryPropertyIfNotNull("tags", packet.Tags);
+
+                // Todo: 'extra' object?
+
+                WritePropertyIfNotNullOrEmpty("message", packet.ServerName);
+                WriteException(packet.Exception);
+                WriteStackTraceIfNotNullOrEmpty(packet.StackTrace);
+
+            }
+            writer.WriteEndObject();
+
+            return stringWriter.ToString();
+        }
+
+        private void WritePropertyIfNotNullOrEmpty(string name, string propertyValue) {
+            if (string.IsNullOrEmpty(propertyValue)) {
+                return;
+            }
+            writer.WritePropertyName(name);
+            writer.WriteValue(propertyValue);
+        }
+
+        private void WriteDictionaryPropertyIfNotNull(string name, IDictionary<string, string> d) {
+            if (d == null) {
+                return;
+            }
+
+            writer.WritePropertyName(name);
+            writer.WriteStartArray();
+            foreach (var entry in d) {
+                writer.WriteStartArray();
+                writer.WriteValue(entry.Key);
+                writer.WriteValue(entry.Value);
+                writer.WriteEndArray();
+            }
+            writer.WriteEndArray();
+        }
+
+        private void WriteListIfNotNull(string name, IList<Module> list) {
+            if (list == null || list.Count == 0) {
+                return;
+            }
+
+            writer.WritePropertyName(name);
+            writer.WriteStartObject();
+            for (int i = 0; i < list.Count; i++) {
+                writer.WritePropertyName(list[i].Name);
+                writer.WriteValue(list[i].Version);
+            }
+            writer.WriteEndObject();
+        }
+
+        private void WriteException(SentryException exception) {
+            writer.WritePropertyName("sentry.interfaces.Exception");
+            writer.WriteStartObject();
+            {
+                WritePropertyIfNotNullOrEmpty("type", exception.Type);
+                WritePropertyIfNotNullOrEmpty("value", exception.Value);
+                WritePropertyIfNotNullOrEmpty("module", exception.Module);
+            }
+            writer.WriteEndObject();
+        }
+
+        private void WriteStackTraceIfNotNullOrEmpty(SentryStacktrace trace) {
+            if (trace == null || trace.Frames.Count == 0) {
+                return;
+            }
+
+            writer.WritePropertyName("sentry.interfaces.Stacktrace");
+            writer.WriteStartObject();
+            {
+                writer.WritePropertyName("frames");
+                writer.WriteStartArray();
+                for (int i = 0; i < trace.Frames.Count; i++) {
+                    var frame = trace.Frames[i];
+                    writer.WriteStartObject();
+                    {
+                        WritePropertyIfNotNullOrEmpty("abs_path", frame.AbsolutePath);
+                        WritePropertyIfNotNullOrEmpty("filename", frame.Filename);
+                        WritePropertyIfNotNullOrEmpty("module", frame.Module);
+                        WritePropertyIfNotNullOrEmpty("function", frame.Function);
+                        WriteDictionaryPropertyIfNotNull("vars", frame.Vars);
+                        WritePropertyIfNotNullOrEmpty("lineno", frame.LineNumber.ToString());
+                        WritePropertyIfNotNullOrEmpty("colno", frame.ColumnNumber.ToString());
+                        // Todo: pre_context, in_app, post_context
+                    }
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+            }
+            writer.WriteEndObject();
+        }
+    }
 }
+
+
+/*
+{
+  "event_id": "18e110117d1e474fa0f9f63a2d661ccc",
+  "project": "79295",
+  "culprit": "CaptureTest in PerformDivideByZero",
+  "level": "error",
+  "timestamp": "\/Date(1464011555794)\/",
+  "logger": "C#",
+  "platform": "csharp",
+  "message": "Division by zero",
+  "server_name": "DESKTOP-AEAMDR3",
+  "sentry.interfaces.Exception": {
+    "type": "DivideByZeroException",
+    "value": "Division by zero",
+    "module": "Assembly-CSharp"
+  },
+  "sentry.interfaces.Stacktrace": {
+    "frames": [
+      {
+        "abs_path": null,
+        "filename": "E:\\code\\raven_sharp_unity\\Assets\\Script\\CaptureTest.cs",
+        "module": "CaptureTest",
+        "function": "testWithStacktrace",
+        "vars": null,
+        "pre_context": null,
+        "context_line": "Void testWithStacktrace()",
+        "lineno": 57,
+        "colno": 0,
+        "in_app": false,
+        "post_context": null
+      },
+      {
+        "abs_path": null,
+        "filename": "E:\\code\\raven_sharp_unity\\Assets\\Script\\CaptureTest.cs",
+        "module": "CaptureTest",
+        "function": "PerformDivideByZero",
+        "vars": null,
+        "pre_context": null,
+        "context_line": "Void PerformDivideByZero()",
+        "lineno": 70,
+        "colno": 0,
+        "in_app": false,
+        "post_context": null
+      }
+    ]
+  }
+}
+*/

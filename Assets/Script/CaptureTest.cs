@@ -20,6 +20,7 @@ public class CaptureTest : MonoBehaviour {
         {
             //for (int i = 0; i < 16; i++) {
                 testWithoutStacktrace();
+                testWithStacktrace();
             //}
         }
 

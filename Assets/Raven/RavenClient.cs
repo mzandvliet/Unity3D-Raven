@@ -43,7 +43,7 @@ namespace SharpRaven
         private readonly Dictionary<string, string> _postHeader;
         private readonly WWW _www;
         private readonly UTF8Encoding _encoding;
-        private readonly MyJsonSerializer _serializer;
+        private readonly JsonPacketSerializer _packetSerializer;
 
         public RavenClient(string dsn) : this(new DSN(dsn)) { }
 
@@ -56,7 +56,7 @@ namespace SharpRaven
             _postHeader = new Dictionary<string, string>();
             _www = new WWW("");
             _encoding = new UTF8Encoding();
-            _serializer = new MyJsonSerializer(null);
+            _packetSerializer = new JsonPacketSerializer();
         }
 
         public int CaptureException(Exception e)
@@ -133,6 +133,8 @@ namespace SharpRaven
             return 0;
         }
 
+        // Todo: pool www objects, let their queries finish, handle result/error
+
         public bool Send(JsonPacket packet, DSN dsn)
         {
             packet.Logger = Logger;
@@ -146,7 +148,7 @@ namespace SharpRaven
             _postHeader.Add("X-Sentry-Auth", authHeader);
             string[] headers = FlattenedHeadersFrom(_postHeader);
 
-            string data = _serializer.Serialize(packet, Formatting.None);
+            string data = _packetSerializer.Serialize(packet, Formatting.None);
 //            if (LogScrubber != null)
 //                data = LogScrubber.Scrub(data);
 
@@ -186,26 +188,6 @@ namespace SharpRaven
                 }
             }
             return _flattenedHeaders;
-        }
-    }
-
-    public class MyJsonSerializer {
-        private JsonSerializer jsonSerializer;
-        private StringWriter stringWriter;
-        JsonTextWriter jsonTextWriter;
-
-        public MyJsonSerializer(JsonSerializerSettings settings) {
-            jsonSerializer = JsonSerializer.Create(settings);
-            stringWriter = new StringWriter(new StringBuilder(128), (IFormatProvider)CultureInfo.InvariantCulture);
-            jsonTextWriter = new JsonTextWriter((TextWriter) stringWriter);
-        }
-
-        public string Serialize(object value, Formatting formatting) {
-            //stringWriter.GetStringBuilder().Remove(0, stringWriter.GetStringBuilder().Length);
-            stringWriter.GetStringBuilder().Length = 0;
-            jsonTextWriter.Formatting = formatting;
-            jsonSerializer.Serialize(jsonTextWriter, value);
-            return stringWriter.ToString();
         }
     }
 }
