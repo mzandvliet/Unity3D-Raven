@@ -23,6 +23,6 @@ public class ExceptionGenerator : MonoBehaviour {
     }
 
     private static void ThrowNestedB() {
-        throw new Exception("Test without a stacktrace");
+        throw new Exception("NestedException");
     }
 }

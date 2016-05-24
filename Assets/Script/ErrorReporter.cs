@@ -2,11 +2,16 @@ using System;
 using UnityEngine;
 using System.Collections.Generic;
 using SharpRaven;
-using UnityEditor;
 
 /* Todo:
+ * 
+ * - How generic do we want this? Maintain feature parity with Raven, or say fuck it and simplify?
+ * - Simplify! It'll make serialization cheaper as well. I only care about making this work for my own Unity games atm.
+ * 
  *  - log error messages too
  *  - handle messages from other threads with Application.logMessageReceivedThreaded
+ *  
+ *  - Application.stackTraceLogType http://docs.unity3d.com/ScriptReference/Application-stackTraceLogType.html (Can include unmanaged stack as well. Never used it though, so don't bother yet.)
  */
 
 public class ErrorReporter : MonoBehaviour {
@@ -14,7 +19,7 @@ public class ErrorReporter : MonoBehaviour {
 
     private RavenClient _ravenClient;
     private Queue<UnityLogEvent> _messageQueue;
-    private Dictionary<string, string> _clientInfo;
+    private Dictionary<string, string> _clientInfoTags;
 
     private void Awake()
 	{
@@ -32,40 +37,33 @@ public class ErrorReporter : MonoBehaviour {
     }
 
     private void CreateRavenClient() {
-        Debug.Log("Initializing RavenClient.");
         _ravenClient = new RavenClient(_dsnUrl, this);
-        _ravenClient.Logger = "C#";
+        _ravenClient.Logger = "Unity";
         _ravenClient.LogScrubber = new SharpRaven.Logging.LogScrubber();
-
-        Debug.Log("Sentry Uri: " + _ravenClient.Dsn.SentryURI);
-        Debug.Log("Port: " + _ravenClient.Dsn.Port);
-        Debug.Log("Public Key: " + _ravenClient.Dsn.PublicKey);
-        Debug.Log("Private Key: " + _ravenClient.Dsn.PrivateKey);
-        Debug.Log("Project ID: " + _ravenClient.Dsn.ProjectID);
 
         // Todo: Include Volo Airsport version string
         // Todo: Since these tags are always included, please just cache them in the jsonpacket or something.
 
-        _clientInfo = new Dictionary<string, string>();
+        _clientInfoTags = new Dictionary<string, string>();
 
-        _clientInfo.Add("Version", "v3.6.1");
-        _clientInfo.Add("UnityVersion", Application.unityVersion);
+        _clientInfoTags.Add("Version", "v3.6.1");
+        _clientInfoTags.Add("UnityVersion", Application.unityVersion);
 
-        _clientInfo.Add("OS", SystemInfo.operatingSystem);
+        _clientInfoTags.Add("OS", SystemInfo.operatingSystem);
 
-        _clientInfo.Add("ProcessorType", SystemInfo.processorType);
-        _clientInfo.Add("ProcessorCount", SystemInfo.processorCount.ToString());
+        _clientInfoTags.Add("ProcessorType", SystemInfo.processorType);
+        _clientInfoTags.Add("ProcessorCount", SystemInfo.processorCount.ToString());
         
-        _clientInfo.Add("MemorySize", SystemInfo.systemMemorySize.ToString());
-        _clientInfo.Add("Screen-Resolution", Screen.currentResolution.ToString()); // Note: can change at runtime
+        _clientInfoTags.Add("MemorySize", SystemInfo.systemMemorySize.ToString());
+        _clientInfoTags.Add("Screen-Resolution", Screen.currentResolution.ToString()); // Note: can change at runtime
 
-        _clientInfo.Add("GPU-Memory", SystemInfo.graphicsMemorySize.ToString());
-        _clientInfo.Add("GPU-Name", SystemInfo.graphicsDeviceName);
-        _clientInfo.Add("GPU-Vendor", SystemInfo.graphicsDeviceVendor);
-        _clientInfo.Add("GPU-VendorID", SystemInfo.graphicsDeviceVendorID.ToString());
-        _clientInfo.Add("GPU-id", SystemInfo.graphicsDeviceID.ToString());
-        _clientInfo.Add("GPU-Version", SystemInfo.graphicsDeviceVersion);
-        _clientInfo.Add("GPU-ShaderLevel", SystemInfo.graphicsShaderLevel.ToString());
+        _clientInfoTags.Add("GPU-Memory", SystemInfo.graphicsMemorySize.ToString());
+        _clientInfoTags.Add("GPU-Name", SystemInfo.graphicsDeviceName);
+        _clientInfoTags.Add("GPU-Vendor", SystemInfo.graphicsDeviceVendor);
+        _clientInfoTags.Add("GPU-VendorID", SystemInfo.graphicsDeviceVendorID.ToString());
+        _clientInfoTags.Add("GPU-id", SystemInfo.graphicsDeviceID.ToString());
+        _clientInfoTags.Add("GPU-Version", SystemInfo.graphicsDeviceVersion);
+        _clientInfoTags.Add("GPU-ShaderLevel", SystemInfo.graphicsShaderLevel.ToString());
 
         // Todo: vr info
     }
@@ -74,6 +72,7 @@ public class ErrorReporter : MonoBehaviour {
         while (_messageQueue.Count > 0) {
             var message = _messageQueue.Dequeue();
             var packet = _ravenClient.CreatePacket(message);
+            packet.Tags = _clientInfoTags;
             _ravenClient.Send(packet);
         }
     }
