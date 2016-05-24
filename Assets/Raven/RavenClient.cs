@@ -10,12 +10,13 @@ using SharpRaven.Logging;
 
 namespace SharpRaven
 {
+    // Todo: don't format and send in the loghandler callback, cache and wait till update, then do loadbalancing as well.
     public class RavenClient
     {
         /// <summary>
         /// The DSN currently being used to log exceptions.
         /// </summary>
-        public DSN CurrentDSN { get; set; }
+        public Dsn Dsn { get; set; }
 
         /// <summary>
         /// Interface for providing a 'log scrubber' that removes 
@@ -41,11 +42,11 @@ namespace SharpRaven
         private readonly WWWPool _wwwPool;
         private readonly MonoBehaviour _routineRunner;
 
-        public RavenClient(string dsn, MonoBehaviour routineRunner) : this(new DSN(dsn), routineRunner) { }
+        public RavenClient(string dsn, MonoBehaviour routineRunner) : this(new Dsn(dsn), routineRunner) { }
 
-        public RavenClient(DSN dsn, MonoBehaviour routineRunner)
+        public RavenClient(Dsn dsn, MonoBehaviour routineRunner)
         {
-            CurrentDSN = dsn;
+            Dsn = dsn;
             _routineRunner = routineRunner;
             Compression = true;
             Logger = "root";
@@ -56,58 +57,27 @@ namespace SharpRaven
             _packetPool = new JsonPacketPool(4);
             _wwwPool = new WWWPool(16);
         }
-
-        ///
-        /// @kims
-        /// NOTE:
-        ///   Commented out secound paramter not to have default paramter due to Unity3d does not resolve that.
-        ///		
-        public int CaptureException(Exception e, Dictionary<string, string> tags = null) {
+        
+        public JsonPacket CreatePacket(UnityLogEvent log) {
             JsonPacket packet = _packetPool.Take();
-            packet.Create(CurrentDSN.ProjectID, e);
+            packet.Create(log);
+            packet.Project = Dsn.ProjectID;
             packet.Level = ErrorLevel.error;
-            packet.Tags = tags;
 
-            Send(packet, CurrentDSN);
-
-            return 0;
+            return packet;
         }
 
-        public int CaptureUnityLog(string log, string stack, LogType logType, Dictionary<string, string> tags)
-        {
-            JsonPacket packet = _packetPool.Take();
-            packet.Create(CurrentDSN.ProjectID, log, stack, logType);
-            packet.Level = ErrorLevel.error;
-            packet.Tags = tags;
-
-            Send(packet, CurrentDSN);
-
-            return 0;
-        }
-
-        public int CaptureMessage(string message, ErrorLevel level, Dictionary<string, string> tags)
-        {
-            JsonPacket packet = new JsonPacket();
-            packet.Project = CurrentDSN.ProjectID;
-            packet.Message = message;
-            packet.Level = level;
-            packet.Tags = tags;
-
-            Send(packet, CurrentDSN);
-
-            return 0;
-        }
-
-        public bool Send(JsonPacket packet, DSN dsn)
+        public void Send(JsonPacket packet)
         {
             if (_wwwPool.Count == 0) {
                 Debug.LogWarning("Skipping GetSentry exception upload, too many sends...\n" + packet.Exception);
             }
 
+            Debug.Log("Sending to GetSentry: " + packet.Exception.Message);
+
             packet.Logger = Logger;
 
-            string authHeader = PacketBuilder.CreateAuthenticationHeader(dsn);
-//            Debug.Log("Header: " + authHeader);
+            string authHeader = PacketBuilder.CreateAuthenticationHeader(Dsn);
 
             _postHeader.Clear();
             _postHeader.Add("ContentType", "application/json");
@@ -118,17 +88,10 @@ namespace SharpRaven
             string data = _packetSerializer.Serialize(packet, Formatting.None);
             _packetPool.Return(packet);
 
-//            if (LogScrubber != null)
-//                data = LogScrubber.Scrub(data);
-
-            //Debug.Log("Packet: " + data);
-
-            _routineRunner.StartCoroutine(SendAsync(dsn, data, headers));
-
-            return true;
+            _routineRunner.StartCoroutine(SendAsync(Dsn, data, headers));
         }
 
-        private IEnumerator SendAsync(DSN dsn, string data, string[] headers) {
+        private IEnumerator SendAsync(Dsn dsn, string data, string[] headers) {
             var www = _wwwPool.Take();
             www.InitWWW(dsn.SentryURI, _encoding.GetBytes(data), headers);
 
@@ -136,12 +99,12 @@ namespace SharpRaven
                 yield return null;
             }
             
-//            if (!string.IsNullOrEmpty(www.error)) {
-//                Debug.LogError("Failed to send error to Sentry: " + www.error);
-//            }
-//            else {
-//                Debug.Log("Sentry response: " + www.text);
-//            }
+            if (!string.IsNullOrEmpty(www.error)) {
+                Debug.LogError("Failed to send error to Sentry: " + www.error);
+            }
+            else {
+                Debug.Log("Sentry response: " + www.text);
+            }
 
             _wwwPool.Return(www);
         }
@@ -188,7 +151,6 @@ namespace SharpRaven
         }
 
         public void Return(JsonPacket packet) {
-            packet.Clear();
             _pool.Enqueue(packet);
         }
     }
@@ -220,5 +182,11 @@ namespace SharpRaven
         public int Count {
             get { return _pool.Count; }
         }
+    }
+
+    public class UnityLogEvent {
+        public string Message;
+        public string StackTrace;
+        public LogType LogType;
     }
 }

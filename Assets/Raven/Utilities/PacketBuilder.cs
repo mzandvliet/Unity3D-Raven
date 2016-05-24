@@ -10,7 +10,7 @@ namespace SharpRaven.Utilities {
         private static StringBuilder _builder;
         private static FieldInfo _stringField;
 
-        public static string CreateAuthenticationHeader(DSN dsn) {
+        public static string CreateAuthenticationHeader(Dsn dsn) {
             if (_builder == null) {
                 _builder = new StringBuilder(2048);
             }

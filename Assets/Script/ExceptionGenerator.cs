@@ -4,12 +4,12 @@ using System;
 public class ExceptionGenerator : MonoBehaviour {
     private void Update() {
         if (Input.GetKeyDown(KeyCode.Space)) {
-            Debug.Log("log test");
-            Debug.LogWarning("warning test");
-            Debug.LogError("error test");
-            Debug.Assert(1 == 2, "assert test");
-
-            ThrowSimple();
+//            Debug.Log("log test");
+//            Debug.LogWarning("warning test");
+//            Debug.LogError("error test");
+//            Debug.Assert(1 == 2, "assert test");
+//
+//            ThrowSimple();
             ThrowNestedA();
         }
     }

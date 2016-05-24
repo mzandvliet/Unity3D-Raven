@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 
 namespace SharpRaven {
-    public class DSN {
+    public class Dsn {
         /// <summary>
         /// Absolute DSN Uri
         /// </summary>
@@ -34,7 +34,7 @@ namespace SharpRaven {
         /// </summary>
         public string Path { get; set; }
 
-        public DSN(string dsn) {
+        public Dsn(string dsn) {
             bool useSSl = dsn.StartsWith("https", StringComparison.InvariantCultureIgnoreCase);
             Uri URI = new Uri(dsn);
 

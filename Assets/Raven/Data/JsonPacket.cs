@@ -2,6 +2,7 @@
 using System;
 using Newtonsoft.Json;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
@@ -72,12 +73,6 @@ namespace SharpRaven.Data {
         public Dictionary<string, string> Tags;
 
         /// <summary>
-        /// Identifies the host client from which the event was recorded.
-        /// </summary>
-        [JsonProperty(PropertyName = "server_name", NullValueHandling = NullValueHandling.Ignore)]
-        public string ServerName { get; set; }
-
-        /// <summary>
         /// A list of relevant modules (libraries) and their versions.
         /// 
         /// Automated to report all modules currently loaded in project.
@@ -91,13 +86,6 @@ namespace SharpRaven.Data {
         [JsonProperty(PropertyName = "sentry.interfaces.Stacktrace", NullValueHandling = NullValueHandling.Ignore)]
         public SentryStacktrace StackTrace { get; set; }
 
-        public JsonPacket() {
-            Tags = new Dictionary<string, string>(4);
-            Modules = new List<Module>(4);
-            Exception = new SentryException();
-            StackTrace = new SentryStacktrace();
-        }
-
         private void Initialize() {
             // Get assemblies.
             /*Modules = new List<Module>();
@@ -110,8 +98,6 @@ namespace SharpRaven.Data {
 
             // Create a guid.
             EventID = GenerateGuid();
-            // The current hostname
-            ServerName = Environment.MachineName;
             // Create timestamp
             TimeStamp = DateTime.UtcNow;
             // Default logger.
@@ -125,48 +111,77 @@ namespace SharpRaven.Data {
             Platform = "csharp";
         }
 
-        public void Create(string project, Exception e) {
-            Initialize();
-            Message = e.Message;
-
-            var targetSite = e.TargetSite;
-			if (targetSite != null) {
-                Culprit = String.Format("{0} in {1}", ((targetSite.ReflectedType == null) ? "<dynamic type>" : targetSite.ReflectedType.FullName), targetSite.Name);
-			}
-
-            Project = project;
-            Level = ErrorLevel.error;
-
-            Exception.Module = e.Source;
-            Exception.Type = e.GetType().Name;
-            Exception.Value = e.Message;
-
-            StackTrace.Create(e);
-        }
-        
-		public void Create(string project, string log, string stack, LogType logType)
+		public void Create(UnityLogEvent log)
 		{
 			Initialize();
-			Message = log;
+			Message = log.Message;
 			
-            Project = project;
             Level = ErrorLevel.error;
 			
-			Exception.Module = log;
-			Exception.Type = logType.ToString();
-			Exception.Value = stack;
-			
-			StackTrace = null; 
+            Exception = new SentryException();
+			Exception.Type = log.LogType.ToString();
+			Exception.Message = log.Message;
+			StackTrace = CreateStackTrace(log.StackTrace); 
 		}
-
-        public void Clear() {
-            Exception.Clear();
-            StackTrace.Clear();
-        }
 
         private static string GenerateGuid() {
             //return Guid.NewGuid().ToString().Replace("-", String.Empty);
             return Guid.NewGuid().ToString("N");
+        }
+
+        private static SentryStacktrace CreateStackTrace(string unityTrace) {
+            /*
+            Example Unity Trace String:
+
+            ExceptionGenerator.ThrowNestedB () (at Assets/Script/ExceptionGenerator.cs:26)
+            ExceptionGenerator.ThrowNestedA () (at Assets/Script/ExceptionGenerator.cs:22)
+            ExceptionGenerator.Update () (at Assets/Script/ExceptionGenerator.cs:13)
+            */
+
+            var t = new SentryStacktrace();
+            
+            var lines = unityTrace.Split(new[] {"\n"}, StringSplitOptions.RemoveEmptyEntries);
+
+            for (int i = 0; i < lines.Length; i++) {
+                var parts = lines[i].Split(new[] {"(", ")", ":"}, StringSplitOptions.RemoveEmptyEntries);
+                var frame = new ExceptionFrame();
+                frame.Function = parts[0];
+                frame.Filename = parts[2].Remove(0, 3);
+                frame.LineNumber = Int32.Parse(parts[3]);
+                t.Frames.Add(frame);
+            }
+
+            return t;
+        }
+
+        private static SentryStacktrace CreateStackTrace(Exception exception) {
+            var t = new SentryStacktrace();
+
+            StackTrace trace = new StackTrace(exception, true);
+
+            for (int i = 0; i < trace.FrameCount; i++) {
+                var frame = trace.GetFrame(i);
+
+                int lineNo = frame.GetFileLineNumber();
+
+                if (lineNo == 0) {
+                    //The pdb files aren't currently available
+                    lineNo = frame.GetILOffset();
+                }
+
+                var method = frame.GetMethod();
+                var frameData = new ExceptionFrame() {
+                    Filename = frame.GetFileName(),
+                    //Module = (method.DeclaringType != null) ? method.DeclaringType.FullName : null,
+                    Function = method.Name,
+                    //Source = method.ToString(),
+                    LineNumber = lineNo,
+                };
+
+                t.Frames.Add(frameData);
+            }
+
+            return t;
         }
     }
 
@@ -205,7 +220,6 @@ namespace SharpRaven.Data {
                 Write("message", packet.Message);
                 Write("tags", packet.Tags);
 
-                Write("message", packet.ServerName);
                 Write(packet.Exception);
                 Write(packet.StackTrace);
 
@@ -258,7 +272,7 @@ namespace SharpRaven.Data {
             writer.WriteStartObject();
             {
                 Write("type", exception.Type);
-                Write("value", exception.Value);
+                Write("value", exception.Message);
                 Write("module", exception.Module);
             }
             writer.WriteEndObject();
@@ -278,14 +292,9 @@ namespace SharpRaven.Data {
                     var frame = trace.Frames[i];
                     writer.WriteStartObject();
                     {
-                        Write("abs_path", frame.AbsolutePath);
                         Write("filename", frame.Filename);
-                        Write("module", frame.Module);
                         Write("function", frame.Function);
-                        Write("vars", frame.Vars);
                         Write("lineno", frame.LineNumber.ToString());
-                        Write("colno", frame.ColumnNumber.ToString());
-                        // Todo: pre_context, in_app, post_context
                     }
                     writer.WriteEndObject();
                 }

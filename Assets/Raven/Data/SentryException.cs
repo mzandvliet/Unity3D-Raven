@@ -13,7 +13,7 @@ namespace SharpRaven.Data {
         /// The message of the exception.
         /// </summary>
         [JsonProperty(PropertyName = "value")]
-        public string Value;
+        public string Message;
         /// <summary>
         /// The module where the exception happened.
         /// </summary>
@@ -25,15 +25,9 @@ namespace SharpRaven.Data {
         }
 
         public SentryException(Exception e) {
-            this.Module = e.Source;
-            this.Type = e.Message;
-            this.Value = e.Message;
-        }
-
-        public void Clear() {
-            Type = null;
-            Value = null;
-            Module = null;
+            Module = e.Source;
+            Type = e.Message;
+            Message = e.Message;
         }
     }
 }
