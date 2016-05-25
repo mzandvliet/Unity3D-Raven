@@ -86,7 +86,21 @@ namespace SharpRaven.Data {
         [JsonProperty(PropertyName = "sentry.interfaces.Stacktrace", NullValueHandling = NullValueHandling.Ignore)]
         public SentryStacktrace StackTrace { get; set; }
 
-        private void Initialize() {
+        public JsonPacket(UnityLogEvent log) {
+            EventID = GenerateGuid();
+            TimeStamp = DateTime.UtcNow;
+            Logger = "root";
+            Project = "default";
+            Platform = "csharp";
+
+            Message = log.Message;
+            Level = ErrorLevel.error;
+
+            Exception = new SentryException();
+            Exception.Type = log.LogType.ToString();
+            Exception.Message = log.Message;
+            StackTrace = ParseUnityStackTrace(log.StackTrace);
+
             // Get assemblies.
             /*Modules = new List<Module>();
             foreach (System.Reflection.Module m in Utilities.SystemUtil.GetModules()) {
@@ -95,41 +109,14 @@ namespace SharpRaven.Data {
                     Version = m.ModuleVersionId.ToString()
                 });
             }*/
-
-            // Create a guid.
-            EventID = GenerateGuid();
-            // Create timestamp
-            TimeStamp = DateTime.UtcNow;
-            // Default logger.
-            Logger = "root";
-            // Default error level.
-            Level = ErrorLevel.error;
-            
-            // Project
-            Project = "default";
-            // Platform
-            Platform = "csharp";
         }
-
-		public void Create(UnityLogEvent log)
-		{
-			Initialize();
-			Message = log.Message;
-			
-            Level = ErrorLevel.error;
-			
-            Exception = new SentryException();
-			Exception.Type = log.LogType.ToString();
-			Exception.Message = log.Message;
-			StackTrace = CreateStackTrace(log.StackTrace); 
-		}
 
         private static string GenerateGuid() {
             //return Guid.NewGuid().ToString().Replace("-", String.Empty);
             return Guid.NewGuid().ToString("N");
         }
 
-        private static SentryStacktrace CreateStackTrace(string unityTrace) {
+        private static SentryStacktrace ParseUnityStackTrace(string unityTrace) {
             /*
             Example Unity Trace String:
 
@@ -154,7 +141,7 @@ namespace SharpRaven.Data {
             return t;
         }
 
-        private static SentryStacktrace CreateStackTrace(Exception exception) {
+        private static SentryStacktrace ParseExceptionStackTrace(Exception exception) {
             var t = new SentryStacktrace();
 
             StackTrace trace = new StackTrace(exception, true);
@@ -307,6 +294,8 @@ namespace SharpRaven.Data {
 
 
 /*
+Example of serialized JsonPacket
+
 {
   "event_id": "18e110117d1e474fa0f9f63a2d661ccc",
   "project": "79295",

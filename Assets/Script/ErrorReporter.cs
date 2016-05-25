@@ -3,7 +3,11 @@ using UnityEngine;
 using System.Collections.Generic;
 using SharpRaven;
 
-/* Todo:
+/* 
+ * Note: Don't worry too much about garbage and performance! When Unity throws an exception it by-default calls StackTraceUtility.PostProcesssStacktrace,
+ * which up to 5ms and allocates 18KB of garbage. So whatever bits of garbage you're adding are just drops in the ocean.
+ * 
+ * Todo:
  * 
  * - How generic do we want this? Maintain feature parity with Raven, or say fuck it and simplify?
  * - Simplify! It'll make serialization cheaper as well. I only care about making this work for my own Unity games atm.
@@ -21,6 +25,7 @@ public class ErrorReporter : MonoBehaviour {
     private Queue<UnityLogEvent> _messageQueue;
     private Dictionary<string, string> _clientInfoTags;
 
+    
     private void Awake()
 	{
 		DontDestroyOnLoad(gameObject);

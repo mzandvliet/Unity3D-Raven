@@ -10,7 +10,11 @@ using SharpRaven.Logging;
 
 namespace SharpRaven
 {
-    // Todo: don't format and send in the loghandler callback, cache and wait till update, then do loadbalancing as well.
+    /* Todo: 
+     * - Handle log messages from non-Unity threads.
+     * - Depending on Unity's WWW for sending means doing the sends on Unity thread, which is not ideal. Of course,
+     * old Mono makes it very hard to use WebRequest and such so we live with it for now.
+     */
     public class RavenClient
     {
         /// <summary>
@@ -38,7 +42,6 @@ namespace SharpRaven
         private readonly Dictionary<string, string> _postHeader;
         private readonly UTF8Encoding _encoding;
         private readonly JsonPacketSerializer _packetSerializer;
-        private readonly JsonPacketPool _packetPool;
         private readonly WWWPool _wwwPool;
         private readonly MonoBehaviour _routineRunner;
 
@@ -54,26 +57,40 @@ namespace SharpRaven
             _postHeader = new Dictionary<string, string>();
             _encoding = new UTF8Encoding();
             _packetSerializer = new JsonPacketSerializer();
-            _packetPool = new JsonPacketPool(4);
             _wwwPool = new WWWPool(16);
         }
         
         public JsonPacket CreatePacket(UnityLogEvent log) {
-            JsonPacket packet = _packetPool.Take();
-            packet.Create(log);
+            JsonPacket packet = new JsonPacket(log);
             packet.Project = Dsn.ProjectID;
             packet.Level = ErrorLevel.error;
 
             return packet;
         }
 
-        public void Send(JsonPacket packet)
-        {
+        private static ErrorLevel GetErrorLevel(LogType logType) {
+            switch (logType) {
+                case LogType.Error:
+                    return ErrorLevel.error;
+                case LogType.Assert:
+                    return ErrorLevel.error;
+                case LogType.Warning:
+                    return ErrorLevel.warning;
+                case LogType.Log:
+                    return ErrorLevel.info;
+                case LogType.Exception:
+                    return ErrorLevel.error;
+                default:
+                    throw new ArgumentOutOfRangeException("logType", logType, null);
+            }
+        }
+
+        public void Send(JsonPacket packet) {
             if (_wwwPool.Count == 0) {
                 Debug.LogWarning("Skipping GetSentry exception upload, too many sends...\n" + packet.Exception);
             }
 
-            Debug.Log("Sending to GetSentry: " + packet.Exception.Message);
+            //Debug.Log("Sending to GetSentry: " + packet.Exception.Message);
 
             packet.Logger = Logger;
 
@@ -86,7 +103,6 @@ namespace SharpRaven
             string[] headers = FlattenedHeadersFrom(_postHeader);
 
             string data = _packetSerializer.Serialize(packet, Formatting.None);
-            _packetPool.Return(packet);
 
             _routineRunner.StartCoroutine(SendAsync(Dsn, data, headers));
         }
@@ -98,21 +114,23 @@ namespace SharpRaven
             while (!www.isDone) {
                 yield return null;
             }
-            
-            if (!string.IsNullOrEmpty(www.error)) {
-                Debug.LogError("Failed to send error to Sentry: " + www.error);
-            }
-            else {
-                Debug.Log("Sentry response: " + www.text);
-            }
+
+//            if (!string.IsNullOrEmpty(www.error)) {
+//                Debug.LogError("Failed to send error to Sentry: " + www.error);
+//            }
+//            else {
+//                Debug.Log("Sentry response: " + www.text);
+//            }
 
             _wwwPool.Return(www);
         }
 
         private static string[] _flattenedHeaders;
+
         private static string[] FlattenedHeadersFrom(Dictionary<string, string> headers) {
-            if (headers == null)
+            if (headers == null) {
                 return null;
+            }
 
             if (_flattenedHeaders == null) {
                 _flattenedHeaders = new string[headers.Count*2];
@@ -127,31 +145,6 @@ namespace SharpRaven
                 }
             }
             return _flattenedHeaders;
-        }
-    }
-
-    public class JsonPacketPool {
-        private readonly Queue<JsonPacket> _pool;
-
-        public JsonPacketPool(int size) {
-            _pool = new Queue<JsonPacket>(size);
-
-            for (int i = 0; i < size; i++) {
-                var packet = new JsonPacket();
-                _pool.Enqueue(packet);
-            }
-        } 
-
-        public JsonPacket Take() {
-            if (_pool.Count == 0) {
-                throw new Exception("Pool is empty");
-            }
-
-            return _pool.Dequeue();
-        }
-
-        public void Return(JsonPacket packet) {
-            _pool.Enqueue(packet);
         }
     }
 
